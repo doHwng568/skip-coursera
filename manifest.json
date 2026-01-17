@@ -1,0 +1,26 @@
+{
+    "manifest_version": 3,
+    "name": "Coursera Skipper",
+    "version": "1.0",
+    "description": "Auto-skip videos and reading materials on Coursera.",
+    "permissions": [
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "https://www.coursera.org/*"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.coursera.org/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
+}
