@@ -21,13 +21,19 @@ class SkiperaJS {
         this.courseId = null;
         this.slug = null;
         this.csrfToken = getCookie("CSRF3-Token");
+        this.isStopped = false; // Add stop flag
 
         if (!this.csrfToken) {
             log("WARNING: CSRF3-Token cookie not found! Requests may fail.");
             console.warn("Available cookies:", document.cookie);
         } else {
-            log("CSRF Token found.");
+            // log("CSRF Token found.");
         }
+    }
+
+    stop() {
+        this.isStopped = true;
+        log("Stopping process...");
     }
 
     getHeaders() {
@@ -93,6 +99,11 @@ class SkiperaJS {
         log("Found " + items.length + " items.");
 
         for (const item of items) {
+            if (this.isStopped) {
+                log("Process stopped by user.");
+                break;
+            }
+
             const typeName = item.contentSummary.typeName;
             if (typeName === "lecture") {
                 log("Processing Video: " + item.name);
@@ -130,6 +141,7 @@ class SkiperaJS {
     }
 
     async watchItem(item) {
+        if (this.isStopped) return;
         const metadata = await this.getVideoMetadata(item.id);
         if (!metadata) return;
 
@@ -145,6 +157,7 @@ class SkiperaJS {
     }
 
     async startItem(item) {
+        if (this.isStopped) return;
         const url = `${BASE_URL}opencourse.v1/user/${this.userId}/course/${this.slug}/item/${item.id}/lecture/videoEvents/play?autoEnroll=false`;
         const headers = { ...this.getHeaders(), 'Content-Type': 'application/json' };
         await fetch(url, {
@@ -155,6 +168,7 @@ class SkiperaJS {
     }
 
     async endItem(item, metadata) {
+        if (this.isStopped) return;
         const url = `${BASE_URL}opencourse.v1/user/${this.userId}/course/${this.slug}/item/${item.id}/lecture/videoEvents/ended?autoEnroll=false`;
         const headers = { ...this.getHeaders(), 'Content-Type': 'application/json' };
         await fetch(url, {
@@ -165,6 +179,7 @@ class SkiperaJS {
     }
 
     async updateProgress(item, metadata) {
+        if (this.isStopped) return;
         const url = `${BASE_URL}onDemandVideoProgresses.v1/${this.userId}~${this.courseId}~${metadata.tracking_id}`;
         const body = {
             videoProgressId: `${this.userId}~${this.courseId}~${metadata.tracking_id}`,
@@ -183,6 +198,7 @@ class SkiperaJS {
     }
 
     async readItem(itemId) {
+        if (this.isStopped) return;
         const url = `${BASE_URL}onDemandSupplementCompletions.v1`;
         const body = {
             courseId: this.courseId,
@@ -205,6 +221,8 @@ function getSlugFromUrl(url) {
     return match ? match[1] : null;
 }
 
+let activeSkipper = null;
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "START_SKIPPING") {
         const slug = getSlugFromUrl(window.location.href);
@@ -214,13 +232,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return;
         }
 
-        const skipper = new SkiperaJS();
-        skipper.getUserId().then(success => {
+        activeSkipper = new SkiperaJS();
+        activeSkipper.getUserId().then(success => {
             if (success) {
-                skipper.getCourse(slug);
+                activeSkipper.getCourse(slug);
             }
         });
         sendResponse({ status: "started" });
+    } else if (request.action === "STOP_SKIPPING") {
+        if (activeSkipper) {
+            activeSkipper.stop();
+            // activeSkipper = null; // Don't null immediately if you want to inspect or restart logically, but for now simple stop is fine.
+            sendResponse({ status: "stopped" });
+        }
     }
     return true; // Keep channel open
 });
