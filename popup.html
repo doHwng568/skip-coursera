@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 350px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 15px;
+      background-color: #f9f9f9;
+    }
+    h2 {
+      margin-top: 0;
+      color: #0056D2; /* Coursera Blue */
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #0056D2;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #0041a3;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: default;
+    }
+    #log {
+      margin-top: 15px;
+      height: 200px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ddd;
+      padding: 10px;
+      font-size: 12px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .status {
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Coursera Skipper</h2>
+  <div class="status" id="status">Ready</div>
+  <button id="startBtn">Start Skipping</button>
+  <div id="log"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
