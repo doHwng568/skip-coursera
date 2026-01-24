@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const stopBtn = document.getElementById('stopBtn');
     const discussionBtn = document.getElementById('discussionBtn');
     const gradePeerBtn = document.getElementById('gradePeerBtn');
+    const doAssignmentBtn = document.getElementById('doAssignmentBtn');
     const logDiv = document.getElementById('log');
     const statusDiv = document.getElementById('status');
 
@@ -96,6 +97,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 log("Error: " + chrome.runtime.lastError.message);
             } else {
                 log("Grade Peer command sent.");
+            }
+        });
+    });
+
+    doAssignmentBtn.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+        if (!tab.url.includes("coursera.org")) {
+            log("Error: Not on Coursera!");
+            return;
+        }
+
+        log("Sending Auto Do Assignment command...");
+        chrome.tabs.sendMessage(tab.id, { action: "AUTO_DO_ASSIGNMENT" }, (response) => {
+            if (chrome.runtime.lastError) {
+                log("Error: " + chrome.runtime.lastError.message);
+            } else {
+                log("Assignment command sent.");
             }
         });
     });
