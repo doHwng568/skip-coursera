@@ -212,6 +212,108 @@ class SkiperaJS {
             body: JSON.stringify(body)
         });
     }
+
+    async autoFillDiscussion() {
+        log("Looking for discussion textbox...");
+        const editor = document.querySelector('div[data-slate-editor="true"]') || document.querySelector('div[role="textbox"]');
+        if (!editor) {
+            log("Discussion textbox not found. Make sure you are on a discussion page.");
+            return;
+        }
+
+        log("Activating editor and setting cursor...");
+        editor.focus();
+
+        // Use Selection API to ensure the cursor is inside the editor
+        try {
+            const range = document.createRange();
+            const sel = window.getSelection();
+
+            // Try to find the deepest first child that can have a selection
+            let focusNode = editor;
+            while (focusNode.firstChild && focusNode.firstChild.nodeType !== 3) {
+                focusNode = focusNode.firstChild;
+            }
+
+            range.setStart(focusNode, 0);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } catch (e) {
+            log("Warning: Could not set selection: " + e.message);
+        }
+
+        // Simulate click
+        ['mousedown', 'mouseup', 'click'].forEach(type => {
+            editor.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        });
+
+        await new Promise(r => setTimeout(r, 200));
+
+        log("Filling discussion (bypassing paste blocks)...");
+        const textToFill = "This course is very helpful! I learned a lot from the materials provided. Thank you!";
+
+        // 1. Try beforeinput event (modern way Slate detects input)
+        const beforeInputEvent = new InputEvent('beforeinput', {
+            inputType: 'insertText',
+            data: textToFill,
+            bubbles: true,
+            cancelable: true
+        });
+        editor.dispatchEvent(beforeInputEvent);
+
+        // 2. Use insertText
+        document.execCommand('insertText', false, textToFill);
+
+        // 3. Dispatch input event
+        editor.dispatchEvent(new InputEvent('input', {
+            inputType: 'insertText',
+            data: textToFill,
+            bubbles: true
+        }));
+
+        // 4. Nudge the editor with a real keypress (Space) to trigger reactive updates
+        const nudgeKeys = [' ', 'a', 'Backspace'];
+        for (const key of nudgeKeys) {
+            ['keydown', 'keypress', 'keyup'].forEach(type => {
+                editor.dispatchEvent(new KeyboardEvent(type, {
+                    key: key,
+                    code: key === ' ' ? 'Space' : (key === 'a' ? 'KeyA' : 'Backspace'),
+                    bubbles: true,
+                    cancelable: true
+                }));
+            });
+            await new Promise(r => setTimeout(r, 50));
+        }
+
+        log("Waiting for Post button to enable...");
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Find Post button with more robust text matching
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const postBtn = buttons.find(b => {
+            const textContent = b.textContent.trim().toLowerCase();
+            return ['post', 'reply', 'gửi', 'phản hồi', 'trả lời'].some(word => textContent.includes(word));
+        });
+
+        if (postBtn) {
+            if (postBtn.disabled) {
+                log("Post button is still disabled. Trying to force state update with Enter...");
+                editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            if (!postBtn.disabled) {
+                log("Clicking Post button...");
+                postBtn.click();
+                log("Discussion submitted successfully!");
+            } else {
+                log("Post button is still disabled. Try clicking it manually or typing one character.");
+            }
+        } else {
+            log("Post button not found. Please click it manually.");
+        }
+    }
 }
 
 // Logic to extract slug from URL
@@ -245,6 +347,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // activeSkipper = null; // Don't null immediately if you want to inspect or restart logically, but for now simple stop is fine.
             sendResponse({ status: "stopped" });
         }
+    } else if (request.action === "AUTO_DISCUSSION") {
+        const skipper = activeSkipper || new SkiperaJS();
+        skipper.autoFillDiscussion();
+        sendResponse({ status: "processing" });
     }
     return true; // Keep channel open
 });
