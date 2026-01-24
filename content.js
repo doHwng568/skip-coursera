@@ -36,6 +36,115 @@ class SkiperaJS {
         log("Stopping process...");
     }
 
+    async autoDoPeerAssignment() {
+        log("Starting Auto Do Peer Assignment (Refined)...");
+
+        // Helper to simulate typing that triggers React/Slate updates
+        const simulateInput = async (element, text) => {
+            element.focus();
+
+            // Try beforeinput first (modern way)
+            const beforeInputEvent = new InputEvent('beforeinput', {
+                inputType: 'insertText',
+                data: text,
+                bubbles: true,
+                cancelable: true
+            });
+            element.dispatchEvent(beforeInputEvent);
+
+            // Use insertText (works for Slate and textareas)
+            document.execCommand('insertText', false, text);
+
+            // Dispatch input event to signal change
+            element.dispatchEvent(new InputEvent('input', {
+                inputType: 'insertText',
+                data: text,
+                bubbles: true
+            }));
+
+            // Nudge with a real key to trigger reactive validation
+            ['keydown', 'keyup'].forEach(type => {
+                element.dispatchEvent(new KeyboardEvent(type, { key: ' ', code: 'Space', bubbles: true }));
+            });
+
+            await new Promise(r => setTimeout(r, 100));
+        };
+
+        // 1. Fill Title
+        log("Looking for Title field...");
+        const titleInput = document.querySelector('input#title') || document.querySelector('input[aria-label="Project Title"]');
+        if (titleInput) {
+            log("Filling Project Title...");
+            await simulateInput(titleInput, "Project Submission - Coursera Skipper Automation");
+        } else {
+            log("Title field not found.");
+        }
+
+        // 2. Find and fill all text content areas
+        log("Searching for assignment content fields...");
+        const contentInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'))
+            .filter(el => el !== titleInput); // Don't re-fill title if it was found here
+
+        log(`Found ${contentInputs.length} content fields.`);
+
+        const fillerText = "In this assignment, I have focused on applying the key concepts learned throughout the module. I have ensured that all requirements are met and the implementation follows the best practices discussed in the lectures. The results obtained match the expected outcomes, demonstrating a clear understanding of the subject matter.";
+
+        for (const input of contentInputs) {
+            const currentVal = input.value || input.textContent || "";
+            if (currentVal.trim().length > 20) continue;
+
+            log("Filling content field...");
+            await simulateInput(input, fillerText);
+        }
+
+        // 3. Check Agreement Checkbox
+        log("Looking for agreement checkbox...");
+        const agreementBox = document.querySelector('input#agreement-checkbox-base') || document.querySelector('input[type="checkbox"]');
+        if (agreementBox) {
+            if (!agreementBox.checked) {
+                log("Checking agreement...");
+                agreementBox.click();
+                agreementBox.checked = true;
+                agreementBox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        } else {
+            log("Agreement checkbox not found.");
+        }
+
+        log("Ready to submit. Looking for Submit button...");
+        await new Promise(r => setTimeout(r, 1000));
+
+        // 4. Find and click Submit button
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const submitBtn = buttons.find(b => {
+            const text = b.textContent.trim().toLowerCase();
+            return ['submit', 'gửi', 'post', 'nộp bài'].some(w => text.includes(w)) && !b.disabled;
+        });
+
+        if (submitBtn) {
+            log("Clicking Submit button...");
+            submitBtn.click();
+
+            // Handle confirmation dialog if it appears
+            await new Promise(r => setTimeout(r, 1500));
+            const confirmButtons = Array.from(document.querySelectorAll('button'));
+            const finalConfirm = confirmButtons.find(b => {
+                const text = b.textContent.trim().toLowerCase();
+                // Avoid clicking the same submit button if it's still there
+                return ['yes', 'có', 'confirm', 'xác nhận', 'submit'].some(w => text.includes(w)) && b !== submitBtn;
+            });
+
+            if (finalConfirm) {
+                log("Clicking final confirmation...");
+                finalConfirm.click();
+            }
+
+            log("Assignment submission triggered!");
+        } else {
+            log("Submit button not found or still disabled. Please review and click manually.");
+        }
+    }
+
     getHeaders() {
         return {
             'x-coursera-application': 'ondemand',
@@ -422,6 +531,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "AUTO_GRADE_PEER") {
         const skipper = activeSkipper || new SkiperaJS();
         skipper.autoGradePeer();
+        sendResponse({ status: "processing" });
+    } else if (request.action === "AUTO_DO_ASSIGNMENT") {
+        const skipper = activeSkipper || new SkiperaJS();
+        skipper.autoDoPeerAssignment();
         sendResponse({ status: "processing" });
     }
     return true; // Keep channel open
