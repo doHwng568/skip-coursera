@@ -58,9 +58,12 @@
 <body>
   <h2>Coursera Skipper</h2>
   <div class="status" id="status">DoHung - 0586255568</div>
-  <div style="display: flex; gap: 10px;">
-    <button id="startBtn">Tua video</button>
-    <button id="stopBtn" disabled style="background-color: #d93025;">Stop</button>
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; gap: 10px;">
+      <button id="startBtn">Tua video</button>
+      <button id="stopBtn" disabled style="background-color: #d93025;">Stop</button>
+    </div>
+    <button id="discussionBtn" style="background-color: #28a745;">Auto Discussion</button>
   </div>
   <div id="log"></div>
   <script src="popup.js"></script>

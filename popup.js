@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
+    const discussionBtn = document.getElementById('discussionBtn');
     const logDiv = document.getElementById('log');
     const statusDiv = document.getElementById('status');
 
@@ -58,6 +59,24 @@ document.addEventListener('DOMContentLoaded', function () {
             if (response && response.status === "stopped") {
                 setRunningState(false);
                 statusDiv.textContent = "Stopped";
+            }
+        });
+    });
+
+    discussionBtn.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+        if (!tab.url.includes("coursera.org")) {
+            log("Error: Not on Coursera!");
+            return;
+        }
+
+        log("Sending Auto Discussion command...");
+        chrome.tabs.sendMessage(tab.id, { action: "AUTO_DISCUSSION" }, (response) => {
+            if (chrome.runtime.lastError) {
+                log("Error: " + chrome.runtime.lastError.message);
+            } else {
+                log("Discussion command sent.");
             }
         });
     });
