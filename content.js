@@ -36,6 +36,115 @@ class SkiperaJS {
         log("Stopping process...");
     }
 
+    async autoDoPeerAssignment() {
+        log("Starting Auto Do Peer Assignment (Refined)...");
+
+        // Helper to simulate typing that triggers React/Slate updates
+        const simulateInput = async (element, text) => {
+            element.focus();
+
+            // Try beforeinput first (modern way)
+            const beforeInputEvent = new InputEvent('beforeinput', {
+                inputType: 'insertText',
+                data: text,
+                bubbles: true,
+                cancelable: true
+            });
+            element.dispatchEvent(beforeInputEvent);
+
+            // Use insertText (works for Slate and textareas)
+            document.execCommand('insertText', false, text);
+
+            // Dispatch input event to signal change
+            element.dispatchEvent(new InputEvent('input', {
+                inputType: 'insertText',
+                data: text,
+                bubbles: true
+            }));
+
+            // Nudge with a real key to trigger reactive validation
+            ['keydown', 'keyup'].forEach(type => {
+                element.dispatchEvent(new KeyboardEvent(type, { key: ' ', code: 'Space', bubbles: true }));
+            });
+
+            await new Promise(r => setTimeout(r, 100));
+        };
+
+        // 1. Fill Title
+        log("Looking for Title field...");
+        const titleInput = document.querySelector('input#title') || document.querySelector('input[aria-label="Project Title"]');
+        if (titleInput) {
+            log("Filling Project Title...");
+            await simulateInput(titleInput, "Project Submission - Coursera Skipper Automation");
+        } else {
+            log("Title field not found.");
+        }
+
+        // 2. Find and fill all text content areas
+        log("Searching for assignment content fields...");
+        const contentInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'))
+            .filter(el => el !== titleInput); // Don't re-fill title if it was found here
+
+        log(`Found ${contentInputs.length} content fields.`);
+
+        const fillerText = "In this assignment, I have focused on applying the key concepts learned throughout the module. I have ensured that all requirements are met and the implementation follows the best practices discussed in the lectures. The results obtained match the expected outcomes, demonstrating a clear understanding of the subject matter.";
+
+        for (const input of contentInputs) {
+            const currentVal = input.value || input.textContent || "";
+            if (currentVal.trim().length > 20) continue;
+
+            log("Filling content field...");
+            await simulateInput(input, fillerText);
+        }
+
+        // 3. Check Agreement Checkbox
+        log("Looking for agreement checkbox...");
+        const agreementBox = document.querySelector('input#agreement-checkbox-base') || document.querySelector('input[type="checkbox"]');
+        if (agreementBox) {
+            if (!agreementBox.checked) {
+                log("Checking agreement...");
+                agreementBox.click();
+                agreementBox.checked = true;
+                agreementBox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        } else {
+            log("Agreement checkbox not found.");
+        }
+
+        log("Ready to submit. Looking for Submit button...");
+        await new Promise(r => setTimeout(r, 1000));
+
+        // 4. Find and click Submit button
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const submitBtn = buttons.find(b => {
+            const text = b.textContent.trim().toLowerCase();
+            return ['submit', 'gửi', 'post', 'nộp bài'].some(w => text.includes(w)) && !b.disabled;
+        });
+
+        if (submitBtn) {
+            log("Clicking Submit button...");
+            submitBtn.click();
+
+            // Handle confirmation dialog if it appears
+            await new Promise(r => setTimeout(r, 1500));
+            const confirmButtons = Array.from(document.querySelectorAll('button'));
+            const finalConfirm = confirmButtons.find(b => {
+                const text = b.textContent.trim().toLowerCase();
+                // Avoid clicking the same submit button if it's still there
+                return ['yes', 'có', 'confirm', 'xác nhận', 'submit'].some(w => text.includes(w)) && b !== submitBtn;
+            });
+
+            if (finalConfirm) {
+                log("Clicking final confirmation...");
+                finalConfirm.click();
+            }
+
+            log("Assignment submission triggered!");
+        } else {
+            log("Submit button not found or still disabled. Please review and click manually.");
+        }
+    }
+
     getHeaders() {
         return {
             'x-coursera-application': 'ondemand',
@@ -316,71 +425,164 @@ class SkiperaJS {
     }
 
     async autoGradePeer() {
-        log("Starting Auto Grade Peer...");
+        log("Starting Auto Grade Peer (Loop mode)...");
 
-        // 1. Handle Radio Buttons (Rubric)
-        log("Searching for radio buttons...");
-        const radioGroups = {};
-        const radioButtons = document.querySelectorAll('input[type="radio"]');
+        const checkRemaining = () => {
+            const countTd = document.querySelector('[data-testid="review-count"]');
+            if (countTd) {
+                const text = countTd.textContent.trim().toLowerCase();
+                log(`Counter text detected: "${text}"`);
 
-        if (radioButtons.length === 0) {
-            log("No radio buttons found. Ensure you are on the grading rubric page.");
-        } else {
-            radioButtons.forEach(rb => {
-                const name = rb.name;
-                if (!radioGroups[name]) radioGroups[name] = [];
-                radioGroups[name].push(rb);
-            });
-
-            log(`Found ${Object.keys(radioGroups).length} criteria groups.`);
-
-            for (const name in radioGroups) {
-                const group = radioGroups[name];
-                // Max score is usually the last radio button in the group
-                const maxOption = group[group.length - 1];
-                if (maxOption && !maxOption.checked) {
-                    maxOption.click();
-                    maxOption.checked = true;
-                    // Trigger change event just in case
-                    maxOption.dispatchEvent(new Event('change', { bubbles: true }));
+                // Case: "Done" or "0 left"
+                if (text.includes('done') || text.includes('0 left') || text.includes('0 còn lại')) {
+                    return 0;
                 }
+
+                const match = text.match(/(\d+)/);
+                return match ? parseInt(match[1]) : 0;
             }
-            log("Max scores selected for all criteria.");
-        }
+            return 999; // Default to high if not found to avoid premature stop
+        };
 
-        // 2. Handle Text Boxes (Feedback)
-        log("Searching for feedback text boxes...");
-        const feedbackText = "Excellent work! Everything is clearly presented and meets all requirements. Well done!";
+        const waitFor = async (selector, timeout = 10000) => {
+            const start = Date.now();
+            while (Date.now() - start < timeout) {
+                const el = document.querySelector(selector);
+                if (el) return el;
+                await new Promise(r => setTimeout(r, 500));
+            }
+            return null;
+        };
 
-        // Find all potential text inputs: textareas and Slate editors
-        const textInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'));
+        const waitForButtons = async (searchTerms, timeout = 10000, excludeNavigation = true) => {
+            const start = Date.now();
+            while (Date.now() - start < timeout) {
+                if (this.isStopped) return null;
 
-        if (textInputs.length === 0) {
-            log("No text feedback boxes found.");
-        } else {
-            for (const input of textInputs) {
-                // Skip if already has content length > 10 (arbitrary)
-                const currentVal = input.value || input.textContent || "";
-                if (currentVal.trim().length > 5) continue;
+                const buttons = Array.from(document.querySelectorAll('button, a'));
+                const found = buttons.find(b => {
+                    const text = b.textContent.trim().toLowerCase();
+                    const isMatch = searchTerms.some(w => text.includes(w)) && !b.disabled;
 
-                log("Filling feedback box...");
-                input.focus();
+                    if (!isMatch) return false;
 
-                if (input.tagName === 'TEXTAREA') {
-                    input.value = feedbackText;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    // If excludeNavigation is true, check if button is in a footer or nav area
+                    if (excludeNavigation) {
+                        const isNav = b.closest('nav') || b.closest('footer') ||
+                            b.closest('[class*="navigation"]') ||
+                            b.closest('[class*="Footer"]');
+                        if (isNav) return false;
+
+                        // Specifically avoid "Next Item" or "Mục tiếp theo"
+                        if (text.includes('next item') || text.includes('mục tiếp theo') ||
+                            text.includes('previous item') || text.includes('mục trước')) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                });
+                if (found) return found;
+                await new Promise(r => setTimeout(r, 500));
+            }
+            return null;
+        };
+
+        while (true) {
+            if (this.isStopped) break;
+
+            // CRITICAL: Check if we are done BEFORE starting any work
+            const remaining = checkRemaining();
+            log(`Remaining reviews needed: ${remaining}`);
+
+            if (remaining === 0) {
+                log("Required reviews completed! Stopping loop to avoid optional work. 🎉");
+                break;
+            }
+
+            // Check if we are still on a peer review url
+            if (!window.location.href.includes('/peer/') && !window.location.href.includes('/grading/')) {
+                log("Navigation detected away from peer review. Stopping loop.");
+                break;
+            }
+
+            // 1. Wait for rubric (radio buttons) to load
+            log("Waiting for rubric (radio buttons)...");
+            const firstRadio = await waitFor('input[type="radio"]');
+            if (!firstRadio) {
+                log("Rubric not found. Checking for 'Review another' button...");
+                const nextPeerBtn = await waitForButtons(['review another', 'chấm bài khác', 'review more'], 3000);
+                if (nextPeerBtn) {
+                    log("Found Next button. Clicking...");
+                    nextPeerBtn.click();
+                    await new Promise(r => setTimeout(r, 4000));
+                    continue; // Re-evaluate loop (will check 'remaining' again)
                 } else {
-                    // Slate or other rich editor
-                    document.execCommand('insertText', false, feedbackText);
-                    input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                    log("Neither rubric nor Next button found. Stopping.");
+                    break;
                 }
-                await new Promise(r => setTimeout(r, 100));
+            } else {
+                // 2. Handle Radio Buttons (Rubric)
+                log("Filling rubric...");
+                const radioButtons = document.querySelectorAll('input[type="radio"]');
+                const radioGroups = {};
+                radioButtons.forEach(rb => {
+                    const name = rb.name;
+                    if (!radioGroups[name]) radioGroups[name] = [];
+                    radioGroups[name].push(rb);
+                });
+
+                for (const name in radioGroups) {
+                    const group = radioGroups[name];
+                    const maxOption = group[group.length - 1];
+                    if (maxOption && !maxOption.checked) {
+                        maxOption.click();
+                        maxOption.checked = true;
+                        maxOption.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+                log("Max scores selected.");
+
+                // 3. Handle Text Boxes (Feedback)
+                log("Filling feedback...");
+                const feedbackText = "Excellent work! Everything is clearly presented and meets all requirements. Well done!";
+                const textInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'));
+
+                for (const input of textInputs) {
+                    const currentVal = input.value || input.textContent || "";
+                    if (currentVal.trim().length > 5) continue;
+
+                    input.focus();
+                    if (input.tagName === 'TEXTAREA') {
+                        input.value = feedbackText;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        document.execCommand('insertText', false, feedbackText);
+                        input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                    }
+                    await new Promise(r => setTimeout(r, 200));
+                }
+
+                log("Current peer graded. Looking for Submit button...");
+                await new Promise(r => setTimeout(r, 1000));
+
+                // 4. Find and click Submit
+                const submitBtn = await waitForButtons(['submit', 'gửi', 'done', 'hoàn thành']);
+                if (submitBtn) {
+                    log(`Clicking Submit button.`);
+                    submitBtn.click();
+                    await new Promise(r => setTimeout(r, 4000)); // Wait for submission process
+                } else {
+                    log("Submit button not found. Stopping loop.");
+                    break;
+                }
             }
-            log("Feedback boxes filled.");
+
+            log("Submission successful. Re-checking progress...");
         }
 
-        log("Auto Grade Peer completed. Please review and click Submit.");
+        log("Auto Grade Peer process ended.");
     }
 }
 
@@ -422,6 +624,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "AUTO_GRADE_PEER") {
         const skipper = activeSkipper || new SkiperaJS();
         skipper.autoGradePeer();
+        sendResponse({ status: "processing" });
+    } else if (request.action === "AUTO_DO_ASSIGNMENT") {
+        const skipper = activeSkipper || new SkiperaJS();
+        skipper.autoDoPeerAssignment();
         sendResponse({ status: "processing" });
     }
     return true; // Keep channel open
