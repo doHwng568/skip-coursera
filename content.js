@@ -316,71 +316,139 @@ class SkiperaJS {
     }
 
     async autoGradePeer() {
-        log("Starting Auto Grade Peer...");
+        log("Starting Auto Grade Peer (Loop mode)...");
 
-        // 1. Handle Radio Buttons (Rubric)
-        log("Searching for radio buttons...");
-        const radioGroups = {};
-        const radioButtons = document.querySelectorAll('input[type="radio"]');
+        const checkRemaining = () => {
+            const countElem = document.querySelector('[data-testid="review-count"] span');
+            if (countElem) {
+                const text = countElem.textContent;
+                const match = text.match(/(\d+)/);
+                return match ? parseInt(match[1]) : 0;
+            }
+            return 0;
+        };
 
-        if (radioButtons.length === 0) {
-            log("No radio buttons found. Ensure you are on the grading rubric page.");
-        } else {
+        const waitFor = async (selector, timeout = 10000) => {
+            const start = Date.now();
+            while (Date.now() - start < timeout) {
+                const el = document.querySelector(selector);
+                if (el) return el;
+                await new Promise(r => setTimeout(r, 500));
+            }
+            return null;
+        };
+
+        const waitForButtons = async (searchTerms, timeout = 10000) => {
+            const start = Date.now();
+            while (Date.now() - start < timeout) {
+                const buttons = Array.from(document.querySelectorAll('button, a'));
+                const found = buttons.find(b => {
+                    const text = b.textContent.trim().toLowerCase();
+                    return searchTerms.some(w => text.includes(w)) && !b.disabled;
+                });
+                if (found) return found;
+                await new Promise(r => setTimeout(r, 500));
+            }
+            return null;
+        };
+
+        while (true) {
+            if (this.isStopped) break;
+
+            const remaining = checkRemaining();
+            log(`Remaining reviews to complete: ${remaining}`);
+
+            // 1. Wait for rubric (radio buttons) to load
+            log("Waiting for rubric (radio buttons)...");
+            const firstRadio = await waitFor('input[type="radio"]');
+            if (!firstRadio) {
+                log("Rubric not found after waiting. Check if the page is loaded correctly.");
+                break;
+            }
+
+            // 2. Handle Radio Buttons (Rubric)
+            log("Filling rubric...");
+            const radioButtons = document.querySelectorAll('input[type="radio"]');
+            const radioGroups = {};
             radioButtons.forEach(rb => {
                 const name = rb.name;
                 if (!radioGroups[name]) radioGroups[name] = [];
                 radioGroups[name].push(rb);
             });
 
-            log(`Found ${Object.keys(radioGroups).length} criteria groups.`);
-
             for (const name in radioGroups) {
                 const group = radioGroups[name];
-                // Max score is usually the last radio button in the group
                 const maxOption = group[group.length - 1];
                 if (maxOption && !maxOption.checked) {
                     maxOption.click();
                     maxOption.checked = true;
-                    // Trigger change event just in case
                     maxOption.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
-            log("Max scores selected for all criteria.");
-        }
+            log("Max scores selected.");
 
-        // 2. Handle Text Boxes (Feedback)
-        log("Searching for feedback text boxes...");
-        const feedbackText = "Excellent work! Everything is clearly presented and meets all requirements. Well done!";
+            // 3. Handle Text Boxes (Feedback)
+            log("Filling feedback...");
+            const feedbackText = "Excellent work! Everything is clearly presented and meets all requirements. Well done!";
+            const textInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'));
 
-        // Find all potential text inputs: textareas and Slate editors
-        const textInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'));
-
-        if (textInputs.length === 0) {
-            log("No text feedback boxes found.");
-        } else {
             for (const input of textInputs) {
-                // Skip if already has content length > 10 (arbitrary)
                 const currentVal = input.value || input.textContent || "";
                 if (currentVal.trim().length > 5) continue;
 
-                log("Filling feedback box...");
                 input.focus();
-
                 if (input.tagName === 'TEXTAREA') {
                     input.value = feedbackText;
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 } else {
-                    // Slate or other rich editor
                     document.execCommand('insertText', false, feedbackText);
                     input.dispatchEvent(new InputEvent('input', { bubbles: true }));
                 }
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise(r => setTimeout(r, 200));
             }
-            log("Feedback boxes filled.");
+
+            log("Current peer graded. Looking for Submit button...");
+            await new Promise(r => setTimeout(r, 1000));
+
+            // 4. Find and click Submit
+            const submitBtn = await waitForButtons(['submit', 'gửi', 'done', 'hoàn thành']);
+            if (submitBtn) {
+                log("Clicking Submit button...");
+                submitBtn.click();
+                await new Promise(r => setTimeout(r, 3000)); // Wait for submission process
+            } else {
+                log("Submit button not found or disabled. Stopping loop.");
+                break;
+            }
+
+            // 5. Final check if we are done
+            const stillRemaining = checkRemaining();
+            log(`Still remaining: ${stillRemaining}`);
+
+            if (stillRemaining === 0) {
+                log("All reviews completed! 🎉");
+                break;
+            }
+
+            // 6. Look for "Review another student" button
+            log("Looking for Next Peer button...");
+            const nextPeerBtn = await waitForButtons(['review another', 'chấm bài khác', 'tiếp theo', 'next']);
+
+            if (nextPeerBtn) {
+                log("Clicking Next Peer button...");
+                nextPeerBtn.click();
+
+                // CRITICAL: Wait for the old rubric to disappear or page to transition
+                log("Waiting for page transition...");
+                await new Promise(r => setTimeout(r, 3000));
+            } else {
+                log("Could not find button to review next student. Stopping.");
+                break;
+            }
         }
 
-        log("Auto Grade Peer completed. Please review and click Submit.");
+        log("Auto Grade Peer process ended.");
     }
 }
 
