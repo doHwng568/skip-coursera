@@ -314,6 +314,74 @@ class SkiperaJS {
             log("Post button not found. Please click it manually.");
         }
     }
+
+    async autoGradePeer() {
+        log("Starting Auto Grade Peer...");
+
+        // 1. Handle Radio Buttons (Rubric)
+        log("Searching for radio buttons...");
+        const radioGroups = {};
+        const radioButtons = document.querySelectorAll('input[type="radio"]');
+
+        if (radioButtons.length === 0) {
+            log("No radio buttons found. Ensure you are on the grading rubric page.");
+        } else {
+            radioButtons.forEach(rb => {
+                const name = rb.name;
+                if (!radioGroups[name]) radioGroups[name] = [];
+                radioGroups[name].push(rb);
+            });
+
+            log(`Found ${Object.keys(radioGroups).length} criteria groups.`);
+
+            for (const name in radioGroups) {
+                const group = radioGroups[name];
+                // Max score is usually the last radio button in the group
+                const maxOption = group[group.length - 1];
+                if (maxOption && !maxOption.checked) {
+                    maxOption.click();
+                    maxOption.checked = true;
+                    // Trigger change event just in case
+                    maxOption.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+            log("Max scores selected for all criteria.");
+        }
+
+        // 2. Handle Text Boxes (Feedback)
+        log("Searching for feedback text boxes...");
+        const feedbackText = "Excellent work! Everything is clearly presented and meets all requirements. Well done!";
+
+        // Find all potential text inputs: textareas and Slate editors
+        const textInputs = Array.from(document.querySelectorAll('textarea, div[data-slate-editor="true"], div[role="textbox"]'));
+
+        if (textInputs.length === 0) {
+            log("No text feedback boxes found.");
+        } else {
+            for (const input of textInputs) {
+                // Skip if already has content length > 10 (arbitrary)
+                const currentVal = input.value || input.textContent || "";
+                if (currentVal.trim().length > 5) continue;
+
+                log("Filling feedback box...");
+                input.focus();
+
+                if (input.tagName === 'TEXTAREA') {
+                    input.value = feedbackText;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                    // Slate or other rich editor
+                    document.execCommand('insertText', false, feedbackText);
+                    input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                }
+                await new Promise(r => setTimeout(r, 100));
+            }
+            log("Feedback boxes filled.");
+        }
+
+        log("Auto Grade Peer completed. Please review and click Submit.");
+    }
 }
 
 // Logic to extract slug from URL
@@ -350,6 +418,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "AUTO_DISCUSSION") {
         const skipper = activeSkipper || new SkiperaJS();
         skipper.autoFillDiscussion();
+        sendResponse({ status: "processing" });
+    } else if (request.action === "AUTO_GRADE_PEER") {
+        const skipper = activeSkipper || new SkiperaJS();
+        skipper.autoGradePeer();
         sendResponse({ status: "processing" });
     }
     return true; // Keep channel open
