@@ -91,8 +91,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        log("Sending Auto Grade Peer command...");
-        chrome.tabs.sendMessage(tab.id, { action: "AUTO_GRADE_PEER" }, (response) => {
+        const gradeCount = document.getElementById('gradeCount').value || 3;
+        log(`Sending Auto Grade Peer command (Count: ${gradeCount})...`);
+        chrome.tabs.sendMessage(tab.id, { action: "AUTO_GRADE_PEER", count: parseInt(gradeCount) }, (response) => {
             if (chrome.runtime.lastError) {
                 log("Error: " + chrome.runtime.lastError.message);
             } else {
