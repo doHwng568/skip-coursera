@@ -60,12 +60,23 @@
   <div class="status" id="status">DoHung - 0586255568</div>
   <div style="display: flex; flex-direction: column; gap: 8px;">
     <div style="display: flex; gap: 10px;">
-      <button id="startBtn">Tua video</button>
+      <button id="startBtn">Skip videos</button>
       <button id="stopBtn" disabled style="background-color: #d93025;">Stop</button>
     </div>
     <button id="discussionBtn" style="background-color: #28a745;">Auto Discussion</button>
-    <button id="gradePeerBtn" style="background-color: #f39c12;">Auto Grade Peer</button>
     <button id="doAssignmentBtn" style="background-color: #17a2b8;">Auto Do Assignment</button>
+
+    
+    <div style="border: solid rgb(61, 84, 215) 2px; padding: 1px;">
+      <button id="gradePeerBtn" style="background-color: #f39c12; margin-top: 4px;">Auto Grade Peer</button>
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 8px 12px; border: 1px solid #eee; border-radius: 8px; margin: 5px 0;">
+        <label for="gradeCount" style="font-size: 13px; color: #666; font-weight: 600;">Grade count:</label>
+        <input type="number" id="gradeCount" value="3" min="1" max="50"
+          style="width: 45px; padding: 6px; border: 1px solid #0056D2; border-radius: 6px; outline: none; font-weight: bold; color: #0056D2; text-align: center;">
+      </div>
+    </div>
+
   </div>
   <div id="log"></div>
   <script src="popup.js"></script>
