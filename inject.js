@@ -52,7 +52,7 @@ observer.observe(document.body || document.documentElement, { childList: true, s
 
 // 3. Block underlying navigation attempts to launch the physical desktop app
 const blockIfCustomProtocol = (url) => {
-    if (typeof url === 'string' && url.includes('coursera-locking-browser')) {
+    if (typeof url === 'string' && (url.includes('coursera-locking-browser') || url.includes('coursera-lock'))) {
         console.log("[Skipper] Blocked custom protocol call to:", url);
         return true;
     }
@@ -114,5 +114,14 @@ if (iframeSrcDesc && iframeSrcDesc.set) {
         }
     });
 }
+
+// Intercept setAttribute (catches iframe.setAttribute('src', ...) and a.setAttribute('href', ...))
+const originalSetAttribute = Element.prototype.setAttribute;
+Element.prototype.setAttribute = function(name, value) {
+    if ((name.toLowerCase() === 'src' || name.toLowerCase() === 'href') && blockIfCustomProtocol(value)) {
+        return;
+    }
+    return originalSetAttribute.apply(this, arguments);
+};
 
 console.log("[Skipper] Injected Coursera Locking Browser bypass layer. User agent is now spoofed and deep-links are blocked.");
