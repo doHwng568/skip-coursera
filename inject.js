@@ -207,7 +207,13 @@ function getCleanSelectionText(context = "") {
         console.error(`[Skipper Trace] [${context}] Error while cleaning text:`, err);
     }
     
+    // Explicitly strip known Coursera static watermark artifacts that might evade DOM detection
+    text = text.replace(/Do you understand\?/gi, '');
+    
+    // Clean up any stray double blank lines created by removing the watermarks
+    text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
     text = text.trim();
+    
     console.log(`[Skipper Trace] [${context}] Final cleaned text length: ${text.length}`);
     return text;
 }
