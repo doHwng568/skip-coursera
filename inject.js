@@ -125,44 +125,144 @@ Element.prototype.setAttribute = function(name, value) {
 };
 
 // 4. Fix Watermark Injection ("abc-123") on Copy
-// Coursera uses several tactics (keydown intercept, clipboard API, copy event) to inject watermarks.
-// We block all of these to ensure clean copying.
+// 4a. Stop Coursera from hijacking the Ctrl+C / Cmd+C keydown event perfectly
+['keydown', 'keyup', 'keypress'].forEach(evt => {
+    window.addEventListener(evt, function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'c') {
+            e.stopPropagation(); // CRITICAL: Stop propagation down the tree
+            e.stopImmediatePropagation();
+            // Do NOT preventDefault, letting the browser native copy proceed
+            console.log(`[Skipper] Intercepted Ctrl+C ${evt}, blocking potential watermark script.`);
+        }
+    }, true); // highest priority
+});
 
-// 4a. Stop Coursera from hijacking the Ctrl+C / Cmd+C keydown event
-window.addEventListener('keydown', function(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'c') {
-        // Stop their listener from triggering and mutating the clipboard
-        e.stopImmediatePropagation();
-        console.log("[Skipper] Intercepted Ctrl+C keydown, blocking potential watermark script.");
+// A robust cleaner to strip DOM-injected hidden watermarks using live DOM computed styles
+function getCleanSelectionText(context = "") {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+        console.log(`[Skipper Trace] [${context}] No selection found.`);
+        return "";
     }
-}, true); // highest priority
+    
+    let text = sel.toString();
+    console.log(`[Skipper Trace] [${context}] Raw 'toString()' length: ${text.length}`);
+    
+    try {
+        const range = sel.getRangeAt(0);
+        let root = range.commonAncestorContainer;
+        if (root.nodeType !== Node.ELEMENT_NODE) {
+            root = root.parentNode;
+        }
+        
+        // Find all elements within the ancestor
+        if (root && root.querySelectorAll) {
+            const elements = root.querySelectorAll('*');
+            let hiddenTexts = [];
+            
+            for (let i = 0; i < elements.length; i++) {
+                let el = elements[i];
+                if (sel.containsNode(el, true)) {
+                    const style = window.getComputedStyle(el);
+                    const isHidden = 
+                        style.opacity === '0' ||
+                        style.visibility === 'hidden' ||
+                        style.display === 'none' ||
+                        parseFloat(style.width) === 0 ||
+                        parseFloat(style.height) === 0 ||
+                        parseFloat(style.fontSize) === 0 ||
+                        style.color === 'transparent' ||
+                        style.color === 'rgba(0, 0, 0, 0)' ||
+                        (style.position === 'absolute' && parseFloat(style.left) < -900) ||
+                        (style.position === 'absolute' && parseFloat(style.top) < -900) ||
+                        (style.clip && style.clip !== 'auto' && style.clip !== 'none') ||
+                        (style.clipPath && style.clipPath !== 'none') ||
+                        el.getAttribute('aria-hidden') === 'true'; // also check aria-hidden
+                    
+                    if (isHidden) {
+                        const elText = (el.innerText || el.textContent || "").trim();
+                        if (elText.length > 0) {
+                            hiddenTexts.push(elText);
+                            console.log(`[Skipper Trace] [${context}] Found hidden text to strip:`, elText);
+                        }
+                    }
+                }
+            }
+            
+            // Sort by length descending, so we replace larger chunks first to prevent partial overlaps
+            hiddenTexts.sort((a, b) => b.length - a.length);
+            
+            for (let ht of hiddenTexts) {
+                if (text.includes(ht)) {
+                    text = text.replace(ht, '');
+                } else {
+                    // Try stripping spaces if exact match fails
+                    const regex = new RegExp(ht.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*'), 'g');
+                    text = text.replace(regex, '');
+                }
+                console.log(`[Skipper Trace] [${context}] Stripped watermark length:`, ht.length);
+            }
+        }
+    } catch (err) {
+        console.error(`[Skipper Trace] [${context}] Error while cleaning text:`, err);
+    }
+    
+    text = text.trim();
+    console.log(`[Skipper Trace] [${context}] Final cleaned text length: ${text.length}`);
+    return text;
+}
 
 // 4b. Stop the 'copy' event from reaching their scripts
 window.addEventListener('copy', function(e) {
-    const selection = window.getSelection().toString();
+    console.log("[Skipper Trace] 'copy' event triggered.");
+    const selection = getCleanSelectionText("CopyEvent");
     if (selection) {
+        console.log("[Skipper Trace] Overriding clipboardData with our selection.");
         e.clipboardData.setData('text/plain', selection);
         e.preventDefault();
-        e.stopPropagation();
+        e.stopPropagation(); // Stop propagation to body/document
         e.stopImmediatePropagation();
         console.log("[Skipper] Cleaned clipboard content at window level.");
     }
 }, true); // highest priority
 
-// 4c. Blackhole any attempts to programmatically write bad text to clipboard
+// 4c. Blackhole programmatically writing bad text to clipboard
 if (navigator.clipboard) {
     const origWriteText = navigator.clipboard.writeText;
     navigator.clipboard.writeText = async function(text) {
-        console.log("[Skipper] Blocked programmatic clipboard writeText. Using raw selection instead.");
-        let selectionStr = window.getSelection().toString();
-        // Fallback to text if there's no selection, but usually this is used to inject bad text
+        console.log("[Skipper Trace] Blocked programmatic clipboard.writeText! Requested text:", text);
+        let selectionStr = getCleanSelectionText("writeText");
         return origWriteText.call(this, selectionStr || text);
+    };
+    
+    const origWrite = navigator.clipboard.write;
+    navigator.clipboard.write = async function(data) {
+        console.log("[Skipper Trace] Blocked programmatic clipboard.write! Data length:", data ? data.length : 0);
+        let selectionStr = getCleanSelectionText("write");
+        if (selectionStr) {
+             console.log("[Skipper Trace] Diverting write -> writeText using selectionStr.");
+             return origWriteText.call(navigator.clipboard, selectionStr);
+        }
+        return origWrite.call(this, data);
     };
 }
 
-// Intercept cut as well, just in case
+// Override legacy execCommand copy
+const origExecCommand = document.execCommand;
+document.execCommand = function(commandId, showUI, value) {
+    if (commandId && commandId.toLowerCase() === 'copy') {
+        console.log("[Skipper Trace] Blocked programmatic document.execCommand('copy').");
+        // We let the natural copy override handle it if possible.
+        // Return true to pretend it worked.
+        return true; 
+    }
+    return origExecCommand.apply(this, arguments);
+};
+
+// Intercept cut as well
 window.addEventListener('cut', function(e) {
+    e.stopPropagation();
     e.stopImmediatePropagation();
 }, true);
 
-console.log("[Skipper] Injected Coursera Locking Browser bypass layer. User agent is now spoofed, deep-links are blocked, and clipboard is protected.");
+console.log("[Skipper] Injected Coursera Locking Browser bypass layer. User agent is now spoofed, deep-links are blocked, and clipboard is fully protected.");
