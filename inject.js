@@ -124,4 +124,45 @@ Element.prototype.setAttribute = function(name, value) {
     return originalSetAttribute.apply(this, arguments);
 };
 
-console.log("[Skipper] Injected Coursera Locking Browser bypass layer. User agent is now spoofed and deep-links are blocked.");
+// 4. Fix Watermark Injection ("abc-123") on Copy
+// Coursera uses several tactics (keydown intercept, clipboard API, copy event) to inject watermarks.
+// We block all of these to ensure clean copying.
+
+// 4a. Stop Coursera from hijacking the Ctrl+C / Cmd+C keydown event
+window.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'c') {
+        // Stop their listener from triggering and mutating the clipboard
+        e.stopImmediatePropagation();
+        console.log("[Skipper] Intercepted Ctrl+C keydown, blocking potential watermark script.");
+    }
+}, true); // highest priority
+
+// 4b. Stop the 'copy' event from reaching their scripts
+window.addEventListener('copy', function(e) {
+    const selection = window.getSelection().toString();
+    if (selection) {
+        e.clipboardData.setData('text/plain', selection);
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        console.log("[Skipper] Cleaned clipboard content at window level.");
+    }
+}, true); // highest priority
+
+// 4c. Blackhole any attempts to programmatically write bad text to clipboard
+if (navigator.clipboard) {
+    const origWriteText = navigator.clipboard.writeText;
+    navigator.clipboard.writeText = async function(text) {
+        console.log("[Skipper] Blocked programmatic clipboard writeText. Using raw selection instead.");
+        let selectionStr = window.getSelection().toString();
+        // Fallback to text if there's no selection, but usually this is used to inject bad text
+        return origWriteText.call(this, selectionStr || text);
+    };
+}
+
+// Intercept cut as well, just in case
+window.addEventListener('cut', function(e) {
+    e.stopImmediatePropagation();
+}, true);
+
+console.log("[Skipper] Injected Coursera Locking Browser bypass layer. User agent is now spoofed, deep-links are blocked, and clipboard is protected.");
