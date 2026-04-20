@@ -141,12 +141,10 @@ Element.prototype.setAttribute = function(name, value) {
 function getCleanSelectionText(context = "") {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) {
-        console.log(`[Skipper Trace] [${context}] No selection found.`);
         return "";
     }
     
     let text = sel.toString();
-    console.log(`[Skipper Trace] [${context}] Raw 'toString()' length: ${text.length}`);
     
     try {
         const range = sel.getRangeAt(0);
@@ -183,7 +181,6 @@ function getCleanSelectionText(context = "") {
                         const elText = (el.innerText || el.textContent || "").trim();
                         if (elText.length > 0) {
                             hiddenTexts.push(elText);
-                            console.log(`[Skipper Trace] [${context}] Found hidden text to strip:`, elText);
                         }
                     }
                 }
@@ -200,11 +197,10 @@ function getCleanSelectionText(context = "") {
                     const regex = new RegExp(ht.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*'), 'g');
                     text = text.replace(regex, '');
                 }
-                console.log(`[Skipper Trace] [${context}] Stripped watermark length:`, ht.length);
             }
         }
     } catch (err) {
-        console.error(`[Skipper Trace] [${context}] Error while cleaning text:`, err);
+        console.error(`[Skipper] Error while cleaning text:`, err);
     }
     
     // Explicitly strip known Coursera static watermark artifacts that might evade DOM detection
@@ -214,16 +210,13 @@ function getCleanSelectionText(context = "") {
     text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
     text = text.trim();
     
-    console.log(`[Skipper Trace] [${context}] Final cleaned text length: ${text.length}`);
     return text;
 }
 
 // 4b. Stop the 'copy' event from reaching their scripts
 window.addEventListener('copy', function(e) {
-    console.log("[Skipper Trace] 'copy' event triggered.");
     const selection = getCleanSelectionText("CopyEvent");
     if (selection) {
-        console.log("[Skipper Trace] Overriding clipboardData with our selection.");
         e.clipboardData.setData('text/plain', selection);
         e.preventDefault();
         e.stopPropagation(); // Stop propagation to body/document
@@ -236,17 +229,14 @@ window.addEventListener('copy', function(e) {
 if (navigator.clipboard) {
     const origWriteText = navigator.clipboard.writeText;
     navigator.clipboard.writeText = async function(text) {
-        console.log("[Skipper Trace] Blocked programmatic clipboard.writeText! Requested text:", text);
         let selectionStr = getCleanSelectionText("writeText");
         return origWriteText.call(this, selectionStr || text);
     };
     
     const origWrite = navigator.clipboard.write;
     navigator.clipboard.write = async function(data) {
-        console.log("[Skipper Trace] Blocked programmatic clipboard.write! Data length:", data ? data.length : 0);
         let selectionStr = getCleanSelectionText("write");
         if (selectionStr) {
-             console.log("[Skipper Trace] Diverting write -> writeText using selectionStr.");
              return origWriteText.call(navigator.clipboard, selectionStr);
         }
         return origWrite.call(this, data);
@@ -257,7 +247,6 @@ if (navigator.clipboard) {
 const origExecCommand = document.execCommand;
 document.execCommand = function(commandId, showUI, value) {
     if (commandId && commandId.toLowerCase() === 'copy') {
-        console.log("[Skipper Trace] Blocked programmatic document.execCommand('copy').");
         // We let the natural copy override handle it if possible.
         // Return true to pretend it worked.
         return true; 
