@@ -504,88 +504,99 @@ class SkiperaJS {
             }
         });
 
-        log(`Parsed ${questions.length} questions. Requesting AI...`);
-
-        let prompt = "You are an expert taking a quiz. Answer the following multiple-choice and fill-in-the-blank questions based on your knowledge. For each question, provide the correct option index (0-indexed) or the text to fill in.\n\n";
-        let qDataForAI = questions.map(q => {
-            let obj = { question_id: q.id, question_text: q.questionText };
-            if (!q.isText) {
-                obj.options = q.options.map(o => ({ index: o.index, text: o.text }));
-            } else {
-                obj.type = "fill-in-the-blank";
-            }
-            return obj;
-        });
-        
-        prompt += JSON.stringify(qDataForAI, null, 2);
-        prompt += '\n\nOutput ONLY a highly accurate valid JSON object matching this exact format:\n{ "answers": [ { "question_id": 0, "selected_option_indices": [1], "text_answer": null } ] }';
+        log(`Parsed ${questions.length} questions. Requesting AI sequentially...`);
 
         try {
-            let aiResponseJson = null;
-            if (provider === 'gemini') {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { response_mime_type: "application/json" }
-                    })
-                });
-                const json = await res.json();
-                if (!res.ok) throw new Error(json.error?.message || "Gemini API Error");
-                let text = json.candidates[0].content.parts[0].text;
-                aiResponseJson = JSON.parse(text);
-            } else if (provider === 'openai') {
-                const url = `https://api.openai.com/v1/chat/completions`;
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                    body: JSON.stringify({
-                        model: "gpt-4o-mini",
-                        messages: [{ role: "user", content: prompt }],
-                        response_format: { type: "json_object" }
-                    })
-                });
-                const json = await res.json();
-                if (!res.ok) throw new Error(json.error?.message || "OpenAI API Error");
-                aiResponseJson = JSON.parse(json.choices[0].message.content);
-            } else {
-                log("Unsupported AI provider.");
-                return;
-            }
+            for (let i = 0; i < questions.length; i++) {
+                if (this.isStopped) {
+                    log("Auto Quiz stopped by user.");
+                    break;
+                }
 
-            let answers = aiResponseJson.answers || aiResponseJson;
-            if (!Array.isArray(answers)) {
-                log("AI response format error. Could not parse answers.");
-                return;
-            }
+                let q = questions[i];
+                log(`Processing question ${i + 1}/${questions.length}: ${q.questionText.substring(0, 30)}...`);
 
-            log(`Received answers for ${answers.length} questions. Filling UI...`);
+                let prompt = "You are an expert taking a quiz. Answer the following question based on your knowledge. Provide the correct option index (0-indexed) or the text to fill in.\n\n";
 
-            for (let ans of answers) {
-                let q = questions.find(q => q.id === ans.question_id);
-                if (!q) continue;
-                
-                if (q.isText && ans.text_answer) {
-                    q.elementRef.focus();
-                    const beforeInputEvent = new InputEvent('beforeinput', { inputType: 'insertText', data: ans.text_answer, bubbles: true, cancelable: true });
-                    q.elementRef.dispatchEvent(beforeInputEvent);
-                    document.execCommand('insertText', false, ans.text_answer);
-                    q.elementRef.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ans.text_answer, bubbles: true }));
-                    q.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
-                } else if (!q.isText && ans.selected_option_indices && ans.selected_option_indices.length > 0) {
-                    for (let idx of ans.selected_option_indices) {
-                        let opt = q.options[idx];
-                        if (opt && opt.elementRef && !opt.elementRef.checked) {
-                            opt.elementRef.click();
-                            opt.elementRef.checked = true;
-                            opt.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
+                let qDataForAI = { question_id: q.id, question_text: q.questionText };
+                if (!q.isText) {
+                    qDataForAI.options = q.options.map(o => ({ index: o.index, text: o.text }));
+                } else {
+                    qDataForAI.type = "fill-in-the-blank";
+                }
+
+                prompt += JSON.stringify(qDataForAI, null, 2);
+                prompt += '\n\nOutput ONLY a highly accurate valid JSON object matching this exact format:\n{ "answers": [ { "question_id": ' + q.id + ', "selected_option_indices": [1], "text_answer": null } ] }';
+
+                let aiResponseJson = null;
+                if (provider === 'gemini') {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { response_mime_type: "application/json" }
+                        })
+                    });
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error?.message || "Gemini API Error");
+                    let text = json.candidates[0].content.parts[0].text;
+                    aiResponseJson = JSON.parse(text);
+                } else if (provider === 'openai') {
+                    const url = `https://api.openai.com/v1/chat/completions`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            messages: [{ role: "user", content: prompt }],
+                            response_format: { type: "json_object" },
+                            temperature: 0.2
+                        })
+                    });
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error?.message || "OpenAI API Error");
+                    aiResponseJson = JSON.parse(json.choices[0].message.content);
+                } else {
+                    log("Unsupported AI provider.");
+                    return;
+                }
+
+                let answers = aiResponseJson.answers || [aiResponseJson];
+                if (!Array.isArray(answers)) {
+                    answers = [answers];
+                }
+
+                for (let ans of answers) {
+                    if (ans.question_id !== q.id) continue;
+                    
+                    if (q.isText && ans.text_answer) {
+                        q.elementRef.focus();
+                        const beforeInputEvent = new InputEvent('beforeinput', { inputType: 'insertText', data: ans.text_answer, bubbles: true, cancelable: true });
+                        q.elementRef.dispatchEvent(beforeInputEvent);
+                        document.execCommand('insertText', false, ans.text_answer);
+                        q.elementRef.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ans.text_answer, bubbles: true }));
+                        q.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else if (!q.isText && ans.selected_option_indices && Array.isArray(ans.selected_option_indices)) {
+                        for (let idx of ans.selected_option_indices) {
+                            let opt = q.options[idx];
+                            if (opt && opt.elementRef && !opt.elementRef.checked) {
+                                opt.elementRef.click();
+                                opt.elementRef.checked = true;
+                                opt.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
                         }
                     }
                 }
+
+                // Add a delay to avoid rate limiting and allow UI to render
+                await new Promise(r => setTimeout(r, 1000));
             }
-            log("Auto Quiz completed successfully!");
+
+            if (!this.isStopped) {
+                log("Auto Quiz completed successfully!");
+            }
             chrome.runtime.sendMessage({ action: "FINISHED" });
 
         } catch (e) {
