@@ -12,8 +12,11 @@
 2.  **Auto Discussion**: Tự động điền và gửi bài thảo luận (Post/Reply) bằng nội dung chuyên nghiệp có sẵn.
 3.  **Auto Do Assignment**: Tự động điền nội dung cho các bài tập tự luận (Peer-graded Assignment) và nhấn nộp bài.
 4.  **Auto Grade Peer**: Tự động chấm điểm bài làm của học viên khác.
-    -   **MỚI**: Cho phép nhập số lượng bài muốn chấm (**Grade count**) để tránh việc chấm quá nhiều bài không cần thiết.
+    -   Cho phép nhập số lượng bài muốn chấm (**Grade count**) để tránh việc chấm quá nhiều bài không cần thiết.
     -   Tự động chọn thang điểm cao nhất và điền nhận xét tích cực.
+5.  **Locking Browser Bypass (MỚI)**: Vượt qua yêu cầu mở app "Coursera Locking Browser".
+    -   Làm bài Assignment trực tiếp ngay trên trình duyệt web thông thường.
+    -   Cho phép thoải mái sử dụng các phím tắt sao chép, dán (`Ctrl+C`, `Ctrl+V`).
 
 ---
 
