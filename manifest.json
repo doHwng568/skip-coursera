@@ -6,7 +6,8 @@
     "permissions": [
         "activeTab",
         "scripting",
-        "declarativeNetRequest"
+        "declarativeNetRequest",
+        "storage"
     ],
     "host_permissions": [
         "*://*.coursera.org/*"
@@ -36,7 +37,8 @@
         },
         {
             "matches": [
-                "https://www.coursera.org/*"
+                "*://*.coursera.org/*",
+                "*://coursera.org/*"
             ],
             "js": [
                 "content.js"

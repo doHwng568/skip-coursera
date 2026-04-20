@@ -451,6 +451,148 @@ class SkiperaJS {
         }
         log("Process ended.");
     }
+
+    async autoDoQuiz(provider, apiKey) {
+        log(`Starting Auto Quiz using ${provider}...`);
+        
+        const elements = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"], textarea.rc-Textarea, input[type="text"]'));
+        if (elements.length === 0) {
+            log("No quiz questions found on this page.");
+            return;
+        }
+
+        let questions = [];
+        let currentQuestion = null;
+        let lastGroupName = null;
+
+        elements.forEach((el, index) => {
+            const isText = el.tagName === 'TEXTAREA' || el.type === 'text';
+            const groupName = isText ? `text_${index}` : el.name;
+            
+            if (groupName !== lastGroupName) {
+                currentQuestion = {
+                    id: questions.length,
+                    groupName: groupName,
+                    isText: isText,
+                    questionText: "",
+                    options: [],
+                    elementRef: isText ? el : null
+                };
+                
+                let container = el.closest('fieldset, .rc-FormPartsQuestion, .rc-Question, div[role="group"], div[data-testid="question-block"]') || el.closest('div[class*="Question"]');
+                if (container) {
+                    currentQuestion.questionText = (container.innerText || "").split('\n')[0];
+                    let qTextEl = container.querySelector('.rc-QuestionText, [data-e2e="question-text"], legend');
+                    if (qTextEl) currentQuestion.questionText = qTextEl.innerText;
+                } else {
+                    let parent = el.closest('div');
+                    currentQuestion.questionText = (parent && parent.parentElement ? parent.parentElement.innerText.split('\n')[0] : `Question ${questions.length + 1}`);
+                }
+
+                questions.push(currentQuestion);
+                lastGroupName = groupName;
+            }
+
+            if (!isText) {
+                const label = el.closest('label') || (el.id ? document.querySelector(`label[for="${el.id}"]`) : null);
+                let optText = label ? label.innerText : (el.value || (el.nextSibling ? el.nextSibling.textContent : `Option ${currentQuestion.options.length + 1}`));
+                currentQuestion.options.push({
+                    index: currentQuestion.options.length,
+                    text: optText.trim(),
+                    elementRef: el
+                });
+            }
+        });
+
+        log(`Parsed ${questions.length} questions. Requesting AI...`);
+
+        let prompt = "You are an expert taking a quiz. Answer the following multiple-choice and fill-in-the-blank questions based on your knowledge. For each question, provide the correct option index (0-indexed) or the text to fill in.\n\n";
+        let qDataForAI = questions.map(q => {
+            let obj = { question_id: q.id, question_text: q.questionText };
+            if (!q.isText) {
+                obj.options = q.options.map(o => ({ index: o.index, text: o.text }));
+            } else {
+                obj.type = "fill-in-the-blank";
+            }
+            return obj;
+        });
+        
+        prompt += JSON.stringify(qDataForAI, null, 2);
+        prompt += '\n\nOutput ONLY a highly accurate valid JSON object matching this exact format:\n{ "answers": [ { "question_id": 0, "selected_option_indices": [1], "text_answer": null } ] }';
+
+        try {
+            let aiResponseJson = null;
+            if (provider === 'gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { response_mime_type: "application/json" }
+                    })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error?.message || "Gemini API Error");
+                let text = json.candidates[0].content.parts[0].text;
+                aiResponseJson = JSON.parse(text);
+            } else if (provider === 'openai') {
+                const url = `https://api.openai.com/v1/chat/completions`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        messages: [{ role: "user", content: prompt }],
+                        response_format: { type: "json_object" }
+                    })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error?.message || "OpenAI API Error");
+                aiResponseJson = JSON.parse(json.choices[0].message.content);
+            } else {
+                log("Unsupported AI provider.");
+                return;
+            }
+
+            let answers = aiResponseJson.answers || aiResponseJson;
+            if (!Array.isArray(answers)) {
+                log("AI response format error. Could not parse answers.");
+                return;
+            }
+
+            log(`Received answers for ${answers.length} questions. Filling UI...`);
+
+            for (let ans of answers) {
+                let q = questions.find(q => q.id === ans.question_id);
+                if (!q) continue;
+                
+                if (q.isText && ans.text_answer) {
+                    q.elementRef.focus();
+                    const beforeInputEvent = new InputEvent('beforeinput', { inputType: 'insertText', data: ans.text_answer, bubbles: true, cancelable: true });
+                    q.elementRef.dispatchEvent(beforeInputEvent);
+                    document.execCommand('insertText', false, ans.text_answer);
+                    q.elementRef.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ans.text_answer, bubbles: true }));
+                    q.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (!q.isText && ans.selected_option_indices && ans.selected_option_indices.length > 0) {
+                    for (let idx of ans.selected_option_indices) {
+                        let opt = q.options[idx];
+                        if (opt && opt.elementRef && !opt.elementRef.checked) {
+                            opt.elementRef.click();
+                            opt.elementRef.checked = true;
+                            opt.elementRef.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                }
+            }
+            log("Auto Quiz completed successfully!");
+            chrome.runtime.sendMessage({ action: "FINISHED" });
+
+        } catch (e) {
+            log("AI Request Error: " + e.message);
+            chrome.runtime.sendMessage({ action: "FINISHED" });
+        }
+    }
 }
 
 function getSlugFromUrl(url) {
@@ -489,6 +631,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "AUTO_DO_ASSIGNMENT") {
         const skipper = activeSkipper || new SkiperaJS();
         skipper.autoDoPeerAssignment();
+        sendResponse({ status: "processing" });
+    } else if (request.action === "AUTO_DO_QUIZ") {
+        const skipper = activeSkipper || new SkiperaJS();
+        skipper.autoDoQuiz(request.provider, request.apiKey);
         sendResponse({ status: "processing" });
     }
     return true;

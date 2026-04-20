@@ -4,8 +4,25 @@ document.addEventListener('DOMContentLoaded', function () {
     const discussionBtn = document.getElementById('discussionBtn');
     const gradePeerBtn = document.getElementById('gradePeerBtn');
     const doAssignmentBtn = document.getElementById('doAssignmentBtn');
+    const doQuizBtn = document.getElementById('doQuizBtn');
+    const aiProviderSelect = document.getElementById('aiProvider');
+    const apiKeyInput = document.getElementById('apiKey');
     const logDiv = document.getElementById('log');
     const statusDiv = document.getElementById('status');
+
+    // Load saved AI settings
+    chrome.storage.local.get(['aiProvider', 'apiKey'], (result) => {
+        if (result.aiProvider) aiProviderSelect.value = result.aiProvider;
+        if (result.apiKey) apiKeyInput.value = result.apiKey;
+    });
+
+    // Save AI settings on change
+    aiProviderSelect.addEventListener('change', () => {
+        chrome.storage.local.set({ aiProvider: aiProviderSelect.value });
+    });
+    apiKeyInput.addEventListener('change', () => {
+        chrome.storage.local.set({ apiKey: apiKeyInput.value });
+    });
 
     function log(msg) {
         const p = document.createElement('div');
@@ -116,6 +133,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 log("Error: " + chrome.runtime.lastError.message);
             } else {
                 log("Assignment command sent.");
+            }
+        });
+    });
+
+    doQuizBtn.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+        if (!tab.url.includes("coursera.org")) {
+            log("Error: Not on Coursera!");
+            return;
+        }
+
+        const provider = aiProviderSelect.value;
+        const key = apiKeyInput.value;
+
+        if (!key) {
+            log("Error: API Key is required for Auto Quiz.");
+            return;
+        }
+
+        log(`Sending Auto Do Quiz command (${provider})...`);
+        chrome.tabs.sendMessage(tab.id, { action: "AUTO_DO_QUIZ", provider: provider, apiKey: key }, (response) => {
+            if (chrome.runtime.lastError) {
+                log("Error: " + chrome.runtime.lastError.message);
+            } else {
+                log("Auto Do Quiz command sent. Please wait for the AI...");
             }
         });
     });
