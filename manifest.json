@@ -5,15 +5,35 @@
     "description": "Auto-skip videos and reading materials on Coursera.",
     "permissions": [
         "activeTab",
-        "scripting"
+        "scripting",
+        "declarativeNetRequest"
     ],
     "host_permissions": [
-        "https://www.coursera.org/*"
+        "*://*.coursera.org/*"
     ],
+    "declarative_net_request": {
+        "rule_resources": [
+            {
+                "id": "ruleset_1",
+                "enabled": true,
+                "path": "rules.json"
+            }
+        ]
+    },
     "action": {
         "default_popup": "popup.html"
     },
     "content_scripts": [
+        {
+            "matches": [
+                "*://*.coursera.org/*"
+            ],
+            "js": [
+                "inject.js"
+            ],
+            "run_at": "document_start",
+            "world": "MAIN"
+        },
         {
             "matches": [
                 "https://www.coursera.org/*"
