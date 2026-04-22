@@ -516,7 +516,7 @@ class SkiperaJS {
                 let q = questions[i];
                 log(`Processing question ${i + 1}/${questions.length}: ${q.questionText.substring(0, 30)}...`);
 
-                let prompt = "You are an expert taking a quiz. Answer the following question based on your knowledge. Provide the correct option index (0-indexed) or the text to fill in.\n\n";
+                let prompt = "You are a highly intelligent expert taking a professional quiz. Evaluate the following question thoroughly and step-by-step before determining the correct answer. Your priority is absolute accuracy. Provide ONLY the correct option index (0-indexed) or the text to fill in.\n\n";
 
                 let qDataForAI = { question_id: q.id, question_text: q.questionText };
                 if (!q.isText) {
@@ -529,8 +529,9 @@ class SkiperaJS {
                 prompt += '\n\nOutput ONLY a highly accurate valid JSON object matching this exact format:\n{ "answers": [ { "question_id": ' + q.id + ', "selected_option_indices": [1], "text_answer": null } ] }';
 
                 let aiResponseJson = null;
-                if (provider === 'gemini') {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                if (provider === 'gemini' || provider === 'gemini-flash' || provider === 'gemini-pro') {
+                    const modelName = provider === 'gemini-pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
                     const res = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -590,8 +591,9 @@ class SkiperaJS {
                     }
                 }
 
-                // Add a delay to avoid rate limiting and allow UI to render
-                await new Promise(r => setTimeout(r, 1000));
+                // Add a delay to avoid rate limiting. Gemini Pro has strict rate limits.
+                const waitTime = provider === 'gemini-pro' ? 2500 : 1000;
+                await new Promise(r => setTimeout(r, waitTime));
             }
 
             if (!this.isStopped) {
