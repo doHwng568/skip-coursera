@@ -40,7 +40,7 @@
 -   Truy cập vào một bài thảo luận cụ thể trên Coursera.
 -   Mở extension và nhấn **Auto Discussion**. Tiện ích sẽ tự động điền nội dung và nhấn **Post**.
 
-### 3. Để Tự Đụng Nộp Bài (Auto Do Assignment) 
+### 3. Để Tự Động Nộp Bài (Auto Do Assignment) 
 -   Truy cập vào trang nộp bài tập (Submit your assignment).
 -   Mở extension và nhấn **Auto Do Assignment**. Tiện ích sẽ điền tiêu đề, nội dung mẫu và nhấn nộp bài.
 
