@@ -1,0 +1,9 @@
+# Project specific
+_metadata/
+*.exe
+*.zip
+extracted/
+
+# Chrome Extension garbage
+.DS_Store
+Thumbs.db

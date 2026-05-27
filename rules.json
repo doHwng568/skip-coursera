@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "append",
+          "value": " CourseraLockingBrowser/0.6.3 coursera-locking-browser/0.6.3"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*.coursera.org/*",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "script", "stylesheet", "image"]
+    }
+  }
+]
