@@ -44,7 +44,6 @@
 -   Truy cập vào trang nộp bài tập (Submit your assignment).
 -   Mở extension và nhấn **Auto Do Assignment**. Tiện ích sẽ điền tiêu đề, nội dung mẫu và nhấn nộp bài.
 
-
 ### 4. Để Tự Động Chấm Điểm (Auto Grade Peer)
 -   Truy cập vào trang chấm điểm bài làm của học viên khác (Peer Review).
 -   Tại ô **Grade count**, nhập số lượng bài bạn cần chấm (ví dụ: 3).
@@ -57,6 +56,21 @@
 -   **Rủi ro**: Việc sử dụng công cụ tự động hóa có thể vi phạm điều khoản dịch vụ của Coursera. Hãy cân nhắc trước khi sử dụng.
 -   **Token**: Tiện ích sử dụng Cookie `CSRF3-Token` hiện tại của bạn để gửi yêu cầu hợp lệ. Nếu gặp lỗi, hãy thử tải lại trang Coursera.
 -   **Dừng lại**: Bạn có thể nhấn nút **Stop** màu đỏ bất cứ lúc nào để dừng quá trình chạy.
+
+---
+
+## 💝 Ủng Hộ Tác Giả (Donate)
+
+Nếu bạn thấy công cụ này hữu ích và giúp bạn tiết kiệm được nhiều thời gian học tập, hãy mời tác giả một ly cà phê để có thêm động lực duy trì và cập nhật tính năng mới nhé!
+
+### 🏦 Chuyển khoản ngân hàng
+*   **Ngân hàng:** `Techcombank`
+*   **Số tài khoản:** `8626262686868`
+*   **Chủ tài khoản:** `DO THE HUNG`
+
+### 📸 Quét mã QR (MoMo / Ngân hàng)
+
+<img src="assets/qr-donate.jpg" alt="Mã QR Ủng Hộ" width="250"/>
 
 ---
 
