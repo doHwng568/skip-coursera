@@ -1,3 +1,5 @@
+# Trong trường hợp nhóm này bị điều tra bởi các cơ quan trực thuộc Bộ Công An, tôi khẳng định mình không liên quan tới repo hoặc những cá nhân khác trong quá trình phát triển của repo này. Tôi không rõ tại sao mình lại có repo này, có lẽ tài khoản của tôi đã được thêm bởi một bên thứ ba. Tôi cũng xin khẳng định rằng mình không hề giúp sức cho những hành động chống phá Coursera của các thành viên trong repo này. 🐧
+
 # Coursera Skipper - Hướng Dẫn Sử Dụng Chi Tiết
 
 **Coursera Skipper** là một tiện ích mở rộng trên Chrome giúp tự động hóa quá trình học tập trên Coursera, giúp bạn tiết kiệm thời gian đáng kể bằng cách tự động bỏ qua video, bài đọc, tự động thảo luận và chấm điểm bài làm.
