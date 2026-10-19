@@ -4,94 +4,181 @@
 <head>
   <style>
     body {
-      width: 350px;
+      width: 380px;
+      max-height: 600px;
+      overflow-y: auto;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      padding: 15px;
-      background-color: #f9f9f9;
+      padding: 12px;
+      background-color: #f4f6f9;
+      box-sizing: border-box;
+      margin: 0;
     }
 
     h2 {
       margin-top: 0;
+      margin-bottom: 4px;
       color: #0056D2;
-      /* Coursera Blue */
+      font-size: 18px;
     }
 
     button {
       width: 100%;
-      padding: 10px;
+      padding: 9px;
       background-color: #0056D2;
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s, opacity 0.2s;
     }
 
-    button:hover {
-      background-color: #0041a3;
+    button:hover:not(:disabled) {
+      filter: brightness(0.92);
     }
 
     button:disabled {
-      background-color: #ccc;
-      cursor: default;
+      background-color: #bdc3c7 !important;
+      cursor: not-allowed;
+      opacity: 0.7;
     }
 
     #log {
-      margin-top: 15px;
-      height: 200px;
+      margin-top: 10px;
+      height: 120px;
       overflow-y: auto;
       background: white;
       border: 1px solid #ddd;
-      padding: 10px;
-      font-size: 12px;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
       font-family: monospace;
       white-space: pre-wrap;
     }
 
     .status {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       font-weight: bold;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* Quiz Assistant Styles */
+    .qa-card {
+      border: 2px solid #10a37f;
+      border-radius: 8px;
+      padding: 10px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .qa-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-answered { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .badge-uncertain { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .badge-missing { background: #ffeeba; color: #9c6500; border: 1px solid #ffdf7e; }
+    .badge-invalid { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    .qa-preview-item {
+      background: #ffffff;
+      border: 1px solid #e1e8ed;
+      border-radius: 5px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+
+    .qa-preview-item:last-child {
+      margin-bottom: 0;
     }
   </style>
 </head>
 
 <body>
-  <h2>Coursera Skipper</h2>
+  <div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <h2>Coursera Skipper</h2>
+    <span style="font-size: 11px; color: #888;">v1.1</span>
+  </div>
   <div class="status" id="status">DoHung - 0586255568</div>
+  
   <div style="display: flex; flex-direction: column; gap: 8px;">
-    <div style="display: flex; gap: 10px;">
-      <button id="startBtn">Skip videos</button>
-      <button id="stopBtn" disabled style="background-color: #d93025;">Stop</button>
+    <!-- Standard Actions -->
+    <div style="display: flex; gap: 8px;">
+      <button id="startBtn" style="flex: 1;">Skip videos</button>
+      <button id="stopBtn" disabled style="background-color: #d93025; flex: 1;">Stop</button>
     </div>
+    
     <button id="discussionBtn" style="background-color: #28a745;">Auto Discussion</button>
-    <button id="doAssignmentBtn" style="background-color: #17a2b8;">Auto Do Peer Assignment </button>
+    <button id="doAssignmentBtn" style="background-color: #17a2b8;">Auto Do Peer Assignment</button>
 
-
-    <div style="border: solid rgb(61, 84, 215) 2px; padding: 1px;">
-      <button id="gradePeerBtn" style="background-color: #f39c12; margin-top: 4px;">Auto Grade Peer </button>
-      <div
-        style="display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 8px 12px; border: 1px solid #eee; border-radius: 8px; margin: 5px 0;">
-        <label for="gradeCount" style="font-size: 13px; color: #666; font-weight: 600;">Grade count:</label>
+    <div style="border: 2px solid rgb(61, 84, 215); border-radius: 8px; padding: 6px; background: #fff;">
+      <button id="gradePeerBtn" style="background-color: #f39c12;">Auto Grade Peer</button>
+      <div style="display: flex; align-items: center; justify-content: space-between; background: #f9f9f9; padding: 6px 10px; border: 1px solid #eee; border-radius: 6px; margin-top: 6px;">
+        <label for="gradeCount" style="font-size: 12px; color: #555; font-weight: 600;">Grade count:</label>
         <input type="number" id="gradeCount" value="3" min="1" max="50"
-          style="width: 45px; padding: 6px; border: 1px solid #0056D2; border-radius: 6px; outline: none; font-weight: bold; color: #0056D2; text-align: center;">
+          style="width: 50px; padding: 4px; border: 1px solid #0056D2; border-radius: 4px; outline: none; font-weight: bold; color: #0056D2; text-align: center;">
       </div>
     </div>
 
-    <div style="border: solid #8e44ad 2px; padding: 1px;">
-      <div
-        style="display: flex; flex-direction: column; gap: 5px; padding: 4px; background: #fff; border-radius: 4px; margin-bottom: 4px;">
-        <label style="font-size: 13px; color: #666; font-weight: 600;">AI Integration:</label>
-        <select id="aiProvider" style="padding: 6px; border: 1px solid #8e44ad; border-radius: 4px; outline: none;">
-          <option value="gemini-flash">Gemini Flash </option>
+    <!-- ChatGPT Quiz Assistant (No API) Panel -->
+    <div class="qa-card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-weight: 700; color: #10a37f; font-size: 13px;">ChatGPT Quiz Assistant — No API</span>
+        <span id="qaTargetTabBadge" class="qa-badge" style="background: #e6f7f2; color: #10a37f; border: 1px solid #10a37f;">Checking tab...</span>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <button id="qaCopyJsonBtn" style="background-color: #10a37f; font-size: 12px; padding: 8px 6px; flex: 2;">Copy Quiz JSON</button>
+        <button id="qaOpenChatGptBtn" style="background-color: #343541; font-size: 12px; padding: 8px 6px; flex: 1;">Open ChatGPT</button>
+      </div>
+
+      <div id="qaExtractStatus" style="font-size: 11px; color: #555; margin-bottom: 6px; min-height: 14px;"></div>
+
+      <div id="qaPromptFallbackContainer" style="display: none; margin-bottom: 6px;">
+        <div style="font-size: 11px; color: #d35400; font-weight: 600; margin-bottom: 2px;">Prompt JSON (select and copy):</div>
+        <textarea id="qaPromptFallbackText" rows="3" readonly style="width: 100%; box-sizing: border-box; font-size: 10px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; padding: 4px;"></textarea>
+      </div>
+
+      <textarea id="qaResponseJsonInput" placeholder="Paste ChatGPT JSON response here..." rows="3"
+        style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 11px; resize: vertical; margin-bottom: 6px;"></textarea>
+
+      <button id="qaValidateBtn" style="background-color: #2c3e50; font-size: 12px; padding: 7px; margin-bottom: 6px;">Validate & Preview</button>
+
+      <div id="qaValidationSummary" style="display: none; font-size: 11px; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px;"></div>
+
+      <div id="qaPreviewContainer" style="display: none; max-height: 160px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 5px; padding: 4px; margin-bottom: 6px; background: #fafafa;">
+        <!-- Previews rendered safely here -->
+      </div>
+
+      <button id="qaApplyBtn" disabled style="background-color: #27ae60; font-size: 13px; font-weight: bold; padding: 8px; margin-bottom: 4px;">Apply Suggested Choices</button>
+      <div style="font-size: 10px; color: #7f8c8d; text-align: center;">Choices are selected only. Does NOT submit quiz.</div>
+      <div id="qaAlert" style="display: none; margin-top: 6px; font-size: 11px; padding: 6px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- AI Integration (API) Panel -->
+    <div style="border: 2px solid #8e44ad; border-radius: 8px; padding: 6px; background: #fff;">
+      <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 6px;">
+        <label style="font-size: 12px; color: #666; font-weight: 600;">AI Integration (API):</label>
+        <select id="aiProvider" style="padding: 5px; border: 1px solid #8e44ad; border-radius: 4px; outline: none; font-size: 12px;">
+          <option value="gemini-flash">Gemini Flash</option>
           <option value="openai">OpenAI API</option>
         </select>
         <input type="password" id="apiKey" placeholder="Enter API Key here..."
-          style="padding: 6px; border: 1px solid #8e44ad; border-radius: 4px; outline: none;">
+          style="padding: 5px; border: 1px solid #8e44ad; border-radius: 4px; outline: none; font-size: 12px;">
       </div>
-      <button id="doQuizBtn" style="background-color: #8e44ad; margin-top: 2px;">Auto Do Quiz</button>
+      <button id="doQuizBtn" style="background-color: #8e44ad;">Auto Do Quiz (API)</button>
     </div>
 
   </div>
+
   <div id="log"></div>
   <script src="popup.js"></script>
 </body>
