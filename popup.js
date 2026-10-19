@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if (response.error && (!response.summary || response.summary.totalQuestionsInQuiz === 0)) {
+            if (response.error) {
                 showQaAlert(response.error);
                 return;
             }

@@ -25,6 +25,16 @@
             .trim();
     }
 
+    function emptyValidationSummary() {
+        return {
+            totalQuestionsInQuiz: 0,
+            validAnswersCount: 0,
+            uncertainCount: 0,
+            missingCount: 0,
+            invalidCount: 0
+        };
+    }
+
     // Extract visible and cleaned text safely from a DOM element
     function extractVisibleText(rootElement) {
         if (!rootElement) return '';
@@ -396,7 +406,7 @@
                     return {
                         valid: false,
                         error: 'No active quiz snapshot found. Please click "Copy Quiz JSON" first while on Coursera.',
-                        summary: { total: 0, valid: 0, uncertain: 0, missing: 0, invalid: 0 }
+                        summary: emptyValidationSummary()
                     };
                 }
 
@@ -404,7 +414,7 @@
                     return {
                         valid: false,
                         error: `Snapshot ID mismatch (Expected "${this.currentSnapshot.snapshotId}", got "${snapshotId}"). Please re-copy Quiz JSON.`,
-                        summary: { total: 0, valid: 0, uncertain: 0, missing: 0, invalid: 0 }
+                        summary: emptyValidationSummary()
                     };
                 }
 
@@ -424,7 +434,7 @@
                     return {
                         valid: false,
                         error: 'The Coursera page was refreshed or re-rendered since the last snapshot. Please click "Copy Quiz JSON" again.',
-                        summary: { total: 0, valid: 0, uncertain: 0, missing: 0, invalid: 0 }
+                        summary: emptyValidationSummary()
                     };
                 }
 
@@ -437,7 +447,7 @@
                     return {
                         valid: false,
                         error: 'Invalid answers format: "answers" must be an array.',
-                        summary: { total: 0, valid: 0, uncertain: 0, missing: 0, invalid: 0 }
+                        summary: emptyValidationSummary()
                     };
                 }
 
@@ -663,7 +673,7 @@
                 return {
                     valid: false,
                     error: "Validation error: " + (err.message || String(err)),
-                    summary: { total: 0, valid: 0, uncertain: 0, missing: 0, invalid: 0 }
+                    summary: emptyValidationSummary()
                 };
             }
         }
@@ -790,7 +800,9 @@
     // Export for browser environment
     if (typeof window !== 'undefined') {
         window.CourseraQuizAssistant = CourseraQuizAssistant;
-        window.courseraQuizAssistant = new CourseraQuizAssistant();
+        // popup.js injects this file before each operation; keep the existing
+        // instance so the snapshot created by exportQuiz survives validation.
+        window.courseraQuizAssistant = window.courseraQuizAssistant || new CourseraQuizAssistant();
     }
 
     // Export for CommonJS (for Node.js test environment)
