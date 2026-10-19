@@ -16,9 +16,12 @@
 4.  **Auto Grade Peer**: Tự động chấm điểm bài làm của học viên khác.
     -   Cho phép nhập số lượng bài muốn chấm (**Grade count**) để tránh việc chấm quá nhiều bài không cần thiết.
     -   Tự động chọn thang điểm cao nhất và điền nhận xét tích cực.
-5.  **Locking Browser Bypass (MỚI)**: Vượt qua yêu cầu mở app "Coursera Locking Browser".
+5.  **Locking Browser Bypass**: Vượt qua yêu cầu mở app "Coursera Locking Browser".
     -   Làm bài Assignment trực tiếp ngay trên trình duyệt web thông thường.
     -   Cho phép thoải mái sử dụng các phím tắt sao chép, dán (`Ctrl+C`, `Ctrl+V`).
+6.  **AI Quiz Assistant (MỚI)**: Trích xuất câu hỏi trắc nghiệm và hỗ trợ điền đáp án từ phản hồi của AI.
+    -   Sao chép câu hỏi dưới dạng JSON kèm mã định danh cho từng đáp án.
+    -   Kiểm tra định dạng, xem trước đáp án và chỉ điền các lựa chọn hợp lệ vào bài quiz.
 
 ---
 
@@ -50,6 +53,14 @@
 -   Truy cập vào trang chấm điểm bài làm của học viên khác (Peer Review).
 -   Tại ô **Grade count**, nhập số lượng bài bạn cần chấm (ví dụ: 3).
 -   Nhấn **Auto Grade Peer**. Tiện ích sẽ tự động chấm đúng số lượng bài bạn đã nhập và dừng lại.
+
+### 5. Để Sử Dụng AI Quiz Assistant
+-   Truy cập trang quiz trắc nghiệm trên Coursera và chờ tất cả câu hỏi, lựa chọn được tải xong.
+-   Mở extension, tìm phần **ChatGPT Quiz Assistant** và nhấn **Copy Quiz JSON**.
+-   Dán JSON vừa sao chép vào ChatGPT. ChatGPT cần trả về duy nhất một JSON chứa `snapshotId` và danh sách `answers`, giữ nguyên các `questionId` và `selectedOptionIds` mà extension đã cung cấp.
+-   Sao chép phản hồi JSON của ChatGPT, dán vào ô **Paste ChatGPT JSON response** trong extension, rồi nhấn **Validate & Preview**.
+-   Kiểm tra phần xem trước. Nếu hiển thị hợp lệ, nhấn **Apply Answers** để điền lựa chọn vào trang quiz. Hãy tự kiểm tra đáp án trước khi nộp bài.
+-   Không tải lại trang quiz hoặc bấm **Copy Quiz JSON** lần nữa trong lúc chờ ChatGPT trả lời. Nếu đã tải lại trang hoặc copy lại JSON, hãy dùng JSON mới để tạo câu trả lời mới; mỗi lần trích xuất có một `snapshotId` riêng.
 
 ---
 
