@@ -616,39 +616,81 @@ function getSlugFromUrl(url) {
 let activeSkipper = null;
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "START_SKIPPING") {
-        const slug = getSlugFromUrl(window.location.href);
-        if (!slug) {
-            log("Could not detect course slug.");
-            sendResponse({ status: "error" });
-            return;
-        }
-        activeSkipper = new SkiperaJS();
-        activeSkipper.getUserId().then(success => {
-            if (success) activeSkipper.getCourse(slug);
-        });
-        sendResponse({ status: "started" });
-    } else if (request.action === "STOP_SKIPPING") {
-        if (activeSkipper) {
-            activeSkipper.stop();
+    try {
+        if (request.action === "START_SKIPPING") {
+            const slug = getSlugFromUrl(window.location.href);
+            if (!slug) {
+                log("Could not detect course slug.");
+                sendResponse({ status: "error" });
+                return false;
+            }
+            activeSkipper = new SkiperaJS();
+            activeSkipper.getUserId().then(success => {
+                if (success) activeSkipper.getCourse(slug);
+            });
+            sendResponse({ status: "started" });
+            return false;
+        } else if (request.action === "STOP_SKIPPING") {
+            if (activeSkipper) {
+                activeSkipper.stop();
+            }
             sendResponse({ status: "stopped" });
+            return false;
+        } else if (request.action === "AUTO_DISCUSSION") {
+            const skipper = activeSkipper || new SkiperaJS();
+            skipper.autoFillDiscussion();
+            sendResponse({ status: "processing" });
+            return false;
+        } else if (request.action === "AUTO_GRADE_PEER") {
+            const skipper = activeSkipper || new SkiperaJS();
+            skipper.autoGradePeer(request.count || 3);
+            sendResponse({ status: "processing" });
+            return false;
+        } else if (request.action === "AUTO_DO_ASSIGNMENT") {
+            const skipper = activeSkipper || new SkiperaJS();
+            skipper.autoDoPeerAssignment();
+            sendResponse({ status: "processing" });
+            return false;
+        } else if (request.action === "AUTO_DO_QUIZ") {
+            const skipper = activeSkipper || new SkiperaJS();
+            skipper.autoDoQuiz(request.provider, request.apiKey);
+            sendResponse({ status: "processing" });
+            return false;
+        } else if (request.action === "QUIZ_EXPORT_JSON") {
+            const assistant = window.courseraQuizAssistant || (typeof CourseraQuizAssistant !== 'undefined' ? new CourseraQuizAssistant() : null);
+            if (!assistant) {
+                sendResponse({ success: false, error: "Quiz Assistant module not loaded." });
+            } else {
+                window.courseraQuizAssistant = assistant;
+                const res = assistant.exportQuiz();
+                sendResponse(res);
+            }
+            return false;
+        } else if (request.action === "QUIZ_VALIDATE_ANSWERS") {
+            const assistant = window.courseraQuizAssistant || (typeof CourseraQuizAssistant !== 'undefined' ? new CourseraQuizAssistant() : null);
+            if (!assistant) {
+                sendResponse({ valid: false, error: "Quiz Assistant module not loaded." });
+            } else {
+                window.courseraQuizAssistant = assistant;
+                const res = assistant.validateAnswers(request.snapshotId, request.answers);
+                sendResponse(res);
+            }
+            return false;
+        } else if (request.action === "QUIZ_APPLY_ANSWERS") {
+            const assistant = window.courseraQuizAssistant || (typeof CourseraQuizAssistant !== 'undefined' ? new CourseraQuizAssistant() : null);
+            if (!assistant) {
+                sendResponse({ success: false, error: "Quiz Assistant module not loaded." });
+            } else {
+                window.courseraQuizAssistant = assistant;
+                const res = assistant.applyAnswers(request.snapshotId, request.answers);
+                sendResponse(res);
+            }
+            return false;
         }
-    } else if (request.action === "AUTO_DISCUSSION") {
-        const skipper = activeSkipper || new SkiperaJS();
-        skipper.autoFillDiscussion();
-        sendResponse({ status: "processing" });
-    } else if (request.action === "AUTO_GRADE_PEER") {
-        const skipper = activeSkipper || new SkiperaJS();
-        skipper.autoGradePeer(request.count || 3);
-        sendResponse({ status: "processing" });
-    } else if (request.action === "AUTO_DO_ASSIGNMENT") {
-        const skipper = activeSkipper || new SkiperaJS();
-        skipper.autoDoPeerAssignment();
-        sendResponse({ status: "processing" });
-    } else if (request.action === "AUTO_DO_QUIZ") {
-        const skipper = activeSkipper || new SkiperaJS();
-        skipper.autoDoQuiz(request.provider, request.apiKey);
-        sendResponse({ status: "processing" });
+    } catch (err) {
+        console.error("[Skipper] Error in message listener:", err);
+        sendResponse({ success: false, error: err.message || String(err) });
+        return false;
     }
-    return true;
+    return false;
 });
