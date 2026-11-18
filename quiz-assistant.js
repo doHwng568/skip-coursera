@@ -267,11 +267,13 @@
 
                         let optionText = '';
 
+                        let associatedLabel = null;
                         // 1. Associated <label> wrapping the input (e.g. .cds-checkboxAndRadio-label)
                         try {
                             const wrappingLabel = inputEl.closest ? inputEl.closest('label') : null;
                             if (wrappingLabel) {
                                 optionText = extractVisibleText(wrappingLabel);
+                                associatedLabel = wrappingLabel;
                             }
                         } catch (e) { }
 
@@ -283,6 +285,7 @@
                                                  document.querySelector(`label[for="${escapedId}"]`);
                                 if (forLabel) {
                                     optionText = extractVisibleText(forLabel);
+                                    if (!associatedLabel) associatedLabel = forLabel;
                                 }
                             } catch (e) { }
                         }
@@ -314,9 +317,11 @@
 
                         optionsMap.set(optionId, {
                             optionId,
+                            optIdx: optIdx,
                             label: labelChar,
                             text: optionText,
-                            inputEl: inputEl
+                            inputEl: inputEl,
+                            labelEl: associatedLabel
                         });
 
                         exportOptions.push({
@@ -365,7 +370,7 @@
                 const payload = {
                     schemaVersion: 1,
                     snapshotId,
-                    task: "You are a professional quiz assistant. Evaluate each question and provide the correct optionId(s). Follow the response contract strictly. Return ONLY a valid JSON object matching the requested schema, with no markdown code blocks or additional text.",
+                    task: "You are a professional quiz assistant. Evaluate each question and provide the correct optionId(s). For multiple-choice questions (selectionMode=multiple), include ALL correct optionIds in the selectedOptionIds array. Return ONLY a valid JSON object matching this schema:\n{\n  \"snapshotId\": \"" + snapshotId + "\",\n  \"schemaVersion\": 1,\n  \"answers\": [\n    {\n      \"questionId\": \"Q001\",\n      \"selectedOptionIds\": [\"Q001_O001\", \"Q001_O003\"],\n      \"status\": \"answered\",\n      \"confidence\": \"high\",\n      \"reason\": \"Brief explanation\"\n    }\n  ]\n}",
                     questions: exportQuestions,
                     responseContract: {
                         schemaVersion: 1,
@@ -495,12 +500,18 @@
                         continue;
                     }
 
-                    // Check uncertain status
-                    const isUncertain = answer.status === 'uncertain' || 
-                                        !answer.selectedOptionIds || 
-                                        (Array.isArray(answer.selectedOptionIds) && answer.selectedOptionIds.length === 0);
+                    // Flexible answer resolution: accept selectedOptionIds, selectedOptionId, selected_option_ids, options, etc.
+                    let rawSelected = answer.selectedOptionIds;
+                    if (rawSelected === undefined || rawSelected === null) {
+                        rawSelected = answer.selectedOptionId !== undefined ? answer.selectedOptionId :
+                                     (answer.selected_option_ids !== undefined ? answer.selected_option_ids :
+                                     (answer.selectedOptions !== undefined ? answer.selectedOptions :
+                                     (answer.options !== undefined ? answer.options : null)));
+                    }
 
-                    if (isUncertain) {
+                    // Check explicit uncertain status or completely missing choices
+                    const isExplicitUncertain = answer.status === 'uncertain';
+                    if (isExplicitUncertain || rawSelected === null || rawSelected === undefined) {
                         uncertainCount++;
                         previews.push({
                             questionId: qId,
@@ -508,7 +519,7 @@
                             selectionMode: q.selectionMode,
                             status: 'uncertain',
                             confidence: answer.confidence || 'low',
-                            reason: cleanText(answer.reason) || 'AI marked as uncertain',
+                            reason: cleanText(answer.reason) || (isExplicitUncertain ? 'AI marked as uncertain' : 'No option provided'),
                             selectedOptionIds: [],
                             selectedOptionTexts: [],
                             valid: true,
@@ -517,49 +528,69 @@
                         continue;
                     }
 
-                    // Ensure selectedOptionIds is an array
-                    let selectedOptionIds = answer.selectedOptionIds;
-                    if (!Array.isArray(selectedOptionIds)) {
-                        if (typeof selectedOptionIds === 'string' && selectedOptionIds.trim()) {
-                            selectedOptionIds = [selectedOptionIds.trim()];
-                            warnings.push(`Question ${qId}: "selectedOptionIds" was a string, normalized to array.`);
-                        } else {
-                            invalidCount++;
-                            errors.push(`Question ${qId}: "selectedOptionIds" must be an array.`);
-                            previews.push({
-                                questionId: qId,
-                                questionText: q.questionText,
-                                selectionMode: q.selectionMode,
-                                status: 'invalid',
-                                confidence: answer.confidence || 'unknown',
-                                reason: cleanText(answer.reason) || '',
-                                selectedOptionIds: [],
-                                selectedOptionTexts: [],
-                                valid: false,
-                                error: '"selectedOptionIds" is not an array'
-                            });
-                            continue;
-                        }
+                    // Normalize raw choices to flat list of strings, splitting commas if present
+                    let rawTokens = [];
+                    if (Array.isArray(rawSelected)) {
+                        rawSelected.forEach(item => {
+                            if (typeof item === 'string') {
+                                item.split(',').map(s => s.trim()).filter(Boolean).forEach(id => rawTokens.push(id));
+                            } else if (item && typeof item === 'object') {
+                                const id = item.optionId || item.id || item.value || item.label;
+                                if (id) rawTokens.push(String(id).trim());
+                            } else if (item !== null && item !== undefined) {
+                                rawTokens.push(String(item).trim());
+                            }
+                        });
+                    } else if (typeof rawSelected === 'string' && rawSelected.trim()) {
+                        rawSelected.split(',').map(s => s.trim()).filter(Boolean).forEach(id => rawTokens.push(id));
+                    } else {
+                        rawTokens.push(String(rawSelected).trim());
                     }
 
-                    // Check for duplicates in selectedOptionIds
-                    const uniqueIds = new Set(selectedOptionIds);
-                    if (uniqueIds.size !== selectedOptionIds.length) {
-                        invalidCount++;
-                        errors.push(`Question ${qId}: contains duplicate selectedOptionIds.`);
+                    if (rawTokens.length === 0) {
+                        uncertainCount++;
                         previews.push({
                             questionId: qId,
                             questionText: q.questionText,
                             selectionMode: q.selectionMode,
-                            status: 'invalid',
-                            confidence: answer.confidence || 'unknown',
-                            reason: cleanText(answer.reason) || '',
-                            selectedOptionIds,
+                            status: 'uncertain',
+                            confidence: answer.confidence || 'low',
+                            reason: cleanText(answer.reason) || 'Empty selection',
+                            selectedOptionIds: [],
                             selectedOptionTexts: [],
-                            valid: false,
-                            error: 'Duplicate option IDs in selection'
+                            valid: true,
+                            error: null
                         });
                         continue;
+                    }
+
+                    // Map letter labels (e.g. "A", "b", "Option A") to optionId if AI returned labels
+                    const resolvedOptionIds = [];
+                    for (const candidate of rawTokens) {
+                        if (q.optionsMap.has(candidate)) {
+                            resolvedOptionIds.push(candidate);
+                        } else {
+                            const cleanCandidate = candidate.replace(/^option\s*/i, '').trim().toUpperCase();
+                            let matchedOptId = null;
+                            for (const [optId, opt] of q.optionsMap) {
+                                if (opt.label && opt.label.toUpperCase() === cleanCandidate) {
+                                    matchedOptId = optId;
+                                    break;
+                                }
+                            }
+                            if (matchedOptId) {
+                                resolvedOptionIds.push(matchedOptId);
+                                warnings.push(`Question ${qId}: Option label "${candidate}" mapped to ID "${matchedOptId}".`);
+                            } else {
+                                resolvedOptionIds.push(candidate);
+                            }
+                        }
+                    }
+
+                    // Deduplicate option IDs gracefully
+                    let selectedOptionIds = Array.from(new Set(resolvedOptionIds));
+                    if (selectedOptionIds.length !== resolvedOptionIds.length) {
+                        warnings.push(`Question ${qId}: Duplicate option IDs in selection were automatically deduplicated.`);
                     }
 
                     // Check option IDs exist in this question
@@ -682,7 +713,7 @@
          * Applies the validated choices to the actual DOM radio and checkbox inputs.
          * STRICT RULE: Never clicks Submit, Finish, Grade, or Next buttons!
          */
-        applyAnswers(snapshotId, answersInput) {
+        async applyAnswers(snapshotId, answersInput) {
             try {
                 const validation = this.validateAnswers(snapshotId, answersInput);
                 if (!validation.valid && validation.summary && validation.summary.validAnswersCount === 0) {
@@ -701,6 +732,44 @@
                 let appliedCount = 0;
                 let optionsToggledCount = 0;
                 const applyDetails = [];
+
+                // Helper to toggle a control safely and notify React ChangeEventPlugin
+                const toggleControl = async (inputEl, targetChecked) => {
+                    if (!inputEl) return false;
+                    if (inputEl.checked === targetChecked) return true;
+
+                    try {
+                        inputEl.focus();
+
+                        // 1. Prime React value tracker so React ChangeEventPlugin will not discard the event
+                        if (inputEl._valueTracker) {
+                            inputEl._valueTracker.setValue(!targetChecked);
+                        }
+
+                        // 2. Perform native click directly on inputEl (bubbles to label and fires click)
+                        inputEl.click();
+
+                        // 3. Ensure native checked state is definitely targetChecked
+                        if (inputEl.checked !== targetChecked) {
+                            const proto = typeof window !== 'undefined' && window.HTMLInputElement ? window.HTMLInputElement.prototype : null;
+                            const nativeSetter = proto ? Object.getOwnPropertyDescriptor(proto, 'checked')?.set : null;
+                            if (nativeSetter) {
+                                nativeSetter.call(inputEl, targetChecked);
+                            } else {
+                                inputEl.checked = targetChecked;
+                            }
+                        }
+
+                        // 4. Force dispatch 'input' and 'change' events so React controlled state updates
+                        inputEl.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        inputEl.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+                        return inputEl.checked === targetChecked;
+                    } catch (e) {
+                        console.warn("[Skipper] Error toggling control:", e);
+                        return false;
+                    }
+                };
 
                 for (const preview of validation.previews) {
                     if (!preview.valid || preview.status !== 'answered') {
@@ -723,17 +792,22 @@
                         const targetOptId = preview.selectedOptionIds[0];
                         const targetOpt = question.optionsMap.get(targetOptId);
 
-                        if (targetOpt && targetOpt.inputEl) {
-                            const radio = targetOpt.inputEl;
-                            if (!radio.checked) {
-                                try {
-                                    radio.focus();
-                                    radio.click();
-                                    radio.checked = true;
-                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
-                                    radio.dispatchEvent(new Event('input', { bubbles: true }));
+                        if (targetOpt) {
+                            let radio = targetOpt.inputEl;
+                            // Re-resolve live element from DOM in case React re-rendered
+                            if (!radio || !radio.isConnected) {
+                                if (question.container && question.container.isConnected) {
+                                    const liveRadios = Array.from(question.container.querySelectorAll('input[type="radio"]'));
+                                    if (targetOpt.optIdx !== undefined && liveRadios[targetOpt.optIdx]) {
+                                        radio = liveRadios[targetOpt.optIdx];
+                                    }
+                                }
+                            }
+                            if (radio && !radio.checked) {
+                                const ok = await toggleControl(radio, true);
+                                if (ok) {
                                     optionsToggledCount++;
-                                } catch (e) {
+                                } else {
                                     questionSuccess = false;
                                 }
                             }
@@ -744,19 +818,33 @@
                         // Multiple choice (checkbox)
                         for (const [optId, opt] of question.optionsMap) {
                             const shouldBeChecked = chosenSet.has(optId);
-                            const checkbox = opt.inputEl;
+
+                            // Re-resolve live element from DOM in case previous option toggles caused React to re-render
+                            let checkbox = opt.inputEl;
+                            if (!checkbox || !checkbox.isConnected) {
+                                if (question.container && question.container.isConnected) {
+                                    const liveCheckboxes = Array.from(question.container.querySelectorAll('input[type="checkbox"]'));
+                                    if (opt.optIdx !== undefined && liveCheckboxes[opt.optIdx]) {
+                                        checkbox = liveCheckboxes[opt.optIdx];
+                                    }
+                                }
+                            }
+                            if (!checkbox || !checkbox.isConnected) {
+                                if (opt.inputEl && opt.inputEl.id) {
+                                    const byId = document.getElementById(opt.inputEl.id);
+                                    if (byId) checkbox = byId;
+                                }
+                            }
 
                             if (checkbox && checkbox.checked !== shouldBeChecked) {
-                                try {
-                                    checkbox.focus();
-                                    checkbox.click();
-                                    checkbox.checked = shouldBeChecked;
-                                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                                    checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+                                const ok = await toggleControl(checkbox, shouldBeChecked);
+                                if (ok) {
                                     optionsToggledCount++;
-                                } catch (e) {
+                                } else {
                                     questionSuccess = false;
                                 }
+                                // Small delay between toggling options to let Coursera's React state settle
+                                await new Promise(r => setTimeout(r, 100));
                             }
                         }
                     }
@@ -775,6 +863,9 @@
                             error: 'Failed to interact with one or more input controls'
                         });
                     }
+
+                    // Small pause between questions
+                    await new Promise(r => setTimeout(r, 30));
                 }
 
                 return {
@@ -800,9 +891,12 @@
     // Export for browser environment
     if (typeof window !== 'undefined') {
         window.CourseraQuizAssistant = CourseraQuizAssistant;
-        // popup.js injects this file before each operation; keep the existing
-        // instance so the snapshot created by exportQuiz survives validation.
-        window.courseraQuizAssistant = window.courseraQuizAssistant || new CourseraQuizAssistant();
+        // Keep existing instance and snapshot while updating prototype methods to latest code
+        if (window.courseraQuizAssistant) {
+            Object.setPrototypeOf(window.courseraQuizAssistant, CourseraQuizAssistant.prototype);
+        } else {
+            window.courseraQuizAssistant = new CourseraQuizAssistant();
+        }
     }
 
     // Export for CommonJS (for Node.js test environment)

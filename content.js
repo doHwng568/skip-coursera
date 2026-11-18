@@ -680,12 +680,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const assistant = window.courseraQuizAssistant || (typeof CourseraQuizAssistant !== 'undefined' ? new CourseraQuizAssistant() : null);
             if (!assistant) {
                 sendResponse({ success: false, error: "Quiz Assistant module not loaded." });
+                return false;
             } else {
                 window.courseraQuizAssistant = assistant;
-                const res = assistant.applyAnswers(request.snapshotId, request.answers);
-                sendResponse(res);
+                Promise.resolve(assistant.applyAnswers(request.snapshotId, request.answers)).then(res => {
+                    sendResponse(res);
+                }).catch(err => {
+                    sendResponse({ success: false, error: err.message || String(err) });
+                });
+                return true;
             }
-            return false;
         }
     } catch (err) {
         console.error("[Skipper] Error in message listener:", err);

@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
-                func: (methodName, methodArgs) => {
+                func: async (methodName, methodArgs) => {
                     try {
                         const assistant = window.courseraQuizAssistant || (typeof CourseraQuizAssistant !== 'undefined' ? new CourseraQuizAssistant() : null);
                         if (!assistant) {
@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         } else if (methodName === 'validateAnswers') {
                             return assistant.validateAnswers(methodArgs[0], methodArgs[1]);
                         } else if (methodName === 'applyAnswers') {
-                            return assistant.applyAnswers(methodArgs[0], methodArgs[1]);
+                            return await assistant.applyAnswers(methodArgs[0], methodArgs[1]);
                         }
                         return { success: false, error: "Unknown method: " + methodName };
                     } catch (err) {
